@@ -1,0 +1,20 @@
+{
+  "mqtt": "mqtt://127.0.0.1:1883",
+  "root": "./keys/root-CA.crt",
+  "region": "eu-central-1",
+
+  "devices": {
+    "livingroom-heater": {
+      "privKey": "./keys/livingroom-heater.private.key",
+      "cert": "./keys/livingroom-heater.cert.pem",
+      "subTopic": "livingroom-heater/reported",
+      "pubTopic": "livingroom-heater/desired"
+    },
+    "livingroom-microclimate": {
+      "privKey": "./keys/livingroom-microclimate.private.key",
+      "cert": "./keys/livingroom-microclimate.cert.pem",
+      "subTopic": "livingroom-microclimate/reported",
+      "pubTopic": "nop"
+    }
+  }
+}

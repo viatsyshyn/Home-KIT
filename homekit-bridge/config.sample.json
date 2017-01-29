@@ -1,0 +1,13 @@
+{
+  "MQTT": "mqtt://127.0.0.1:1883",
+  "MAC": "C1:5D:3A:AE:5E:FA",
+  "PIC": "031-45-154",
+  "port": 51827,
+  "name": "MyHomeKit",
+
+  "accessories": [{
+    "package": "./sample-accessory.js",
+    "name": "sample-accessory",
+    "params": {}
+  }]
+}

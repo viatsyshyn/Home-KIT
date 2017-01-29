@@ -1,0 +1,31 @@
+{
+  "name": "homekit-bridge",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "devDependencies": {
+    "pm2": "^2.2.3"
+  },
+  "scripts": {
+    "dev": "node index.js",
+    "start": "./node_modules/.bin/pm2 start index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/viatsyshyn/Home-KIT.git"
+  },
+  "keywords": [
+    "homekit-accessory",
+    "HAP-NodeJS"
+  ],
+  "author": "Volodymyr Iatsyshyn <viatsyshyn@gmail.com>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/viatsyshyn/Home-KIT/issues"
+  },
+  "homepage": "https://github.com/viatsyshyn/Home-KIT#readme",
+  "dependencies": {
+    "hap-nodejs": "^0.4.21",
+    "mqtt": "^2.3.0"
+  }
+}
