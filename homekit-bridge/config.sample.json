@@ -4,6 +4,7 @@
   "PIC": "031-45-154",
   "port": 51827,
   "name": "MyHomeKit",
+  "storage": "mongodb://localhost:27017/homekit",
 
   "accessories": [{
     "package": "./sample-accessory.js",

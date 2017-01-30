@@ -5,6 +5,9 @@ import * as fs from 'fs';
 import {
     IConfig
 } from 'config.d.ts';
+import {
+    MongoClient
+} from 'mongodb';
 
 const config: IConfig = JSON.parse(fs.readFileSync('./config.json'));
 
@@ -46,6 +49,7 @@ Object.keys(signals).forEach( signal =>
     }));
 
 const mosquittoUrl = config.MQTT;
+let storage = null;
 
 const mqttClient = mqtt
     .connect(mosquittoUrl)
@@ -64,5 +68,39 @@ const mqttClient = mqtt
                 pincode: bridge.pincode,
                 category: Accessory.Categories.BRIDGE
             });
+
+        if (config.storage) {
+            MongoClient.connect(config.storage, (err, db) => {
+                if (err)
+                    throw err;
+                console.log(`Connected to ${config.storage}`);
+
+                mqttClient.subscribe('#');
+
+                storage = db.collection('events');
+            });
+        }
     })
-    .on('error', console.error);
+    .on('error', console.error)
+    .on('message', (topic, message) => {
+        let parts = topic.split('/');
+        let state = parts.pop();
+        let device = parts.join('/');
+        let msg = null;
+
+        try {
+            msg = JSON.parse(message.toString());
+        } catch (e) {
+            return console.error('Parse error', e);
+        }
+        storage.insert({
+            timestamp: new Date().getTime(),
+            device: device,
+            state: state,
+            topic: topic,
+            message: msg,
+            raw: message.toString()
+        }, (err) => {
+            if (err) console.error(err);
+        })
+    });

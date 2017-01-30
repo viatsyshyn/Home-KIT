@@ -10,6 +10,7 @@ export interface IConfig {
     PIN: string;
     port?: number;
     name?: string;
+    storage?: string;
 
     accessories: IAccessory[];
 }
