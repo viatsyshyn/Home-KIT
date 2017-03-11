@@ -83,6 +83,8 @@ const mqttClient = mqtt
     })
     .on('error', console.error)
     .on('message', (topic, message) => {
+        console.log("RECEIVED:", topic, message.toString(), '\n\n');
+
         let parts = topic.split('/');
         let state = parts.pop();
         let device = parts.join('/');

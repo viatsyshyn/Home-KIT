@@ -7,70 +7,7 @@ module.exports = (hap, mqtt, info) => {
     const Service = hap.Service;
     const Characteristic = hap.Characteristic;
 
-    /**
-     * Characteristic "Current In Temperature"
-     */
-
-    function CurrentInTemperature() {
-        Characteristic.call(this, 'Current In Temperature', CurrentInTemperature.UUID);
-        this.setProps({
-            format: Characteristic.Formats.FLOAT,
-            unit: Characteristic.Units.CELSIUS,
-            maxValue: 127,
-            minValue: -127,
-            minStep: 0.1,
-            perms: [Characteristic.Perms.READ, Characteristic.Perms.NOTIFY]
-        });
-        this.value = this.getDefaultValue();
-    }
-
-    inherits(CurrentInTemperature, Characteristic);
-
-    CurrentInTemperature.UUID = uuid.generate('hap-nodejs:accessories:heater-controller:heater-service:in-temperature');
-
-    /**
-     * Characteristic "Current Out Temperature"
-     */
-
-    function CurrentOutTemperature() {
-        Characteristic.call(this, 'Current Out Temperature', CurrentOutTemperature.UUID);
-        this.setProps({
-            format: Characteristic.Formats.FLOAT,
-            unit: Characteristic.Units.CELSIUS,
-            maxValue: 127,
-            minValue: -127,
-            minStep: 0.1,
-            perms: [Characteristic.Perms.READ, Characteristic.Perms.NOTIFY]
-        });
-        this.value = this.getDefaultValue();
-    }
-
-    inherits(CurrentOutTemperature, Characteristic);
-
-    CurrentOutTemperature.UUID = uuid.generate('hap-nodejs:accessories:heater-controller:heater-service:out-temperature');
-
-    /**
-     * Service "Heater"
-     */
-
-    function Heater(displayName, subtype) {
-        Service.call(this, displayName, Heater.UUID, subtype);
-
-        // Required Characteristics
-        this.addCharacteristic(Characteristic.On)
-            .updateValue(false);
-        this.addCharacteristic(CurrentInTemperature);
-        this.addCharacteristic(CurrentOutTemperature);
-
-        // Optional Characteristics
-        this.addOptionalCharacteristic(Characteristic.Name);
-    }
-
-    inherits(Heater, Service);
-
     const item_id = info.mqttId;
-
-    Heater.UUID = uuid.generate(`hap-nodejs:accessories:heater-controller:heater-service`);
 
     // Generate a consistent UUID for our Temperature Sensor Accessory that will remain the same
     // even when restarting our server. We use the `uuid.generate` helper function to create
@@ -78,18 +15,41 @@ module.exports = (hap, mqtt, info) => {
     let controllerUUID = uuid.generate(`hap-nodejs:accessories:heater-controller:${item_id}`);
 
     // This is the Accessory that we'll return to HAP-NodeJS that represents our fake lock.
-    let controller = new Accessory('Heater', controllerUUID);
+    let controller = new Accessory(`Heater (${item_id})`, controllerUUID);
+
+    controller
+        .getService(Service.AccessoryInformation)
+        .setCharacteristic(Characteristic.Manufacturer, "SmartHome LLC")
+        .setCharacteristic(Characteristic.Model, "Heater Controller Prototype A")
+        .setCharacteristic(Characteristic.SerialNumber, "HTC-PTA-0.0.1");
 
     // Add the actual TemperatureSensor Service.
     // We can see the complete list of Services and Characteristics in `lib/gen/HomeKitTypes.js`
-    controller.addService(Heater);
+    const service = controller.addService(Service.HeaterCooler, "Heater");
 
     const sub_topic = `${item_id}/reported`;
+    const pub_topic = `${item_id}/desired`;
+
+    service
+        .getCharacteristic(Characteristic.Active)
+        .on('change', event => {
+            mqtt.publish(pub_topic, JSON.stringify({
+                active: event.newValue == Characteristic.Active.ACTIVE
+            }));
+        });
+
+    let timer_ = setTimeout(() => controller.updateReachability(false), 50);
 
     mqtt.subscribe(sub_topic)
         .on('message', (topic, message) => {
-            console.log("RECEIVED:", topic, message.toString(), '\n\n');
             let msg = null;
+
+            if (topic.substr(0, item_id.length) === item_id) {
+                controller.updateReachability(true);
+
+                timer_ && clearTimeout(timer_);
+                timer_ = setTimeout(() => controller.updateReachability(false), 150000);
+            }
 
             try {
                 msg = JSON.parse(message.toString());
@@ -98,20 +58,28 @@ module.exports = (hap, mqtt, info) => {
             }
 
             if (msg && sub_topic === topic) {
-                controller
-                    .getService(Heater)
-                    .getCharacteristic(Characteristic.On)
-                    .updateValue(msg.active);
+                if (typeof msg.active === 'boolean') {
+                    service
+                        .getCharacteristic(Characteristic.Active)
+                        .updateValue(msg.active
+                            ? Characteristic.Active.ACTIVE
+                            : Characteristic.Active.INACTIVE);
 
-                controller
-                    .getService(Heater)
-                    .getCharacteristic(CurrentInTemperature)
-                    .updateValue(msg.values[0]);
+                }
 
-                controller
-                    .getService(Heater)
-                    .getCharacteristic(CurrentOutTemperature)
-                    .updateValue(msg.values[1]);
+                if (Array.isArray(msg.values) && msg.values.length == 2) {
+                    msg.values.sort((a,b) => b-a);
+
+                    service
+                        .getCharacteristic(Characteristic.CurrentTemperature)
+                        .updateValue((parseFloat(msg.values[0]) + parseFloat(msg.values[1])) / 2);
+
+                    service
+                        .getCharacteristic(Characteristic.CurrentHeaterCoolerState)
+                        .updateValue(Math.abs(msg.values[0] - msg.values[1]) > .75
+                            ? Characteristic.CurrentHeaterCoolerState.HEATING
+                            : Characteristic.CurrentHeaterCoolerState.IDLE);
+                }
             }
         });
 

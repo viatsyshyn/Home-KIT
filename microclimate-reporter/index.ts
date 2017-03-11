@@ -10,10 +10,16 @@ module.exports = (hap, mqtt, info) =>
     // Generate a consistent UUID for our Temperature Sensor Accessory that will remain the same
     // even when restarting our server. We use the `uuid.generate` helper function to create
     // a deterministic UUID based on an arbitrary "namespace" and the string "temperature-sensor".
-    var sensorUUID = uuid.generate(`hap-nodejs:accessories:microclimate-sensor:${item_id}`);
+    const sensorUUID = uuid.generate(`hap-nodejs:accessories:microclimate-sensor:${item_id}`);
 
     // This is the Accessory that we'll return to HAP-NodeJS that represents our fake lock.
-    var sensor = new Accessory('Microclimate', sensorUUID);
+    const sensor = new Accessory(`Microclimate (${item_id})`, sensorUUID);
+
+    sensor
+        .getService(Service.AccessoryInformation)
+        .setCharacteristic(Characteristic.Manufacturer, "SmartHome LLC")
+        .setCharacteristic(Characteristic.Model, "Microclimate Sensors Prototype A")
+        .setCharacteristic(Characteristic.SerialNumber, "MCS-PTA0.0.1");
 
     // Add the actual TemperatureSensor Service.
     // We can see the complete list of Services and Characteristics in `lib/gen/HomeKitTypes.js`
@@ -22,10 +28,18 @@ module.exports = (hap, mqtt, info) =>
 
     const sub_topic = `${item_id}/reported`;
 
+    let timer_ = setTimeout(() => sensor.updateReachability(false), 50);
+
     mqtt.subscribe(sub_topic)
         .on('message', (topic, message) => {
-            console.log("RECEIVED:", topic, message.toString(), '\n\n');
             let msg = null;
+
+            if (topic.substr(0, item_id.length) === item_id) {
+                sensor.updateReachability(true);
+
+                timer_ && clearTimeout(timer_);
+                timer_ = setTimeout(() => sensor.updateReachability(false), 150000);
+            }
 
             try {
                 msg = JSON.parse(message.toString());
