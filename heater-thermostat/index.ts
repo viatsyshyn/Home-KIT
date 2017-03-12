@@ -17,7 +17,7 @@ module.exports = (hap, mqtt, info) => {
     // Generate a consistent UUID for our Temperature Sensor Accessory that will remain the same
     // even when restarting our server. We use the `uuid.generate` helper function to create
     // a deterministic UUID based on an arbitrary "namespace" and the string "temperature-sensor".
-    let controllerUUID = uuid.generate(`hap-nodejs:accessories:heater-thermostat:${info.mqttId}`);
+    let controllerUUID = uuid.generate(`hap-nodejs:accessories:heater-thermostat:${item_id}`);
 
     // This is the Accessory that we'll return to HAP-NodeJS that represents our fake lock.
     let controller = new Accessory(`Thermostat (${item_id})`, controllerUUID);
@@ -84,13 +84,13 @@ module.exports = (hap, mqtt, info) => {
 
         switch (targetMode) {
             case Characteristic.TargetHeatingCoolingState.AUTO:
-                if (currentTemp < targetTemp - .5) {
+                if (currentTemp < targetTemp - .25) {
                     mqtt.publish(heater_pub_topic, JSON.stringify({
                         active: heater_target_state = true
                     }));
                 }
 
-                if (currentTemp > targetTemp + .5) {
+                if (currentTemp > targetTemp + .25) {
                     mqtt.publish(heater_pub_topic, JSON.stringify({
                         active: heater_target_state = false
                     }));

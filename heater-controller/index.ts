@@ -68,15 +68,13 @@ module.exports = (hap, mqtt, info) => {
                 }
 
                 if (Array.isArray(msg.values) && msg.values.length == 2) {
-                    msg.values.sort((a,b) => b-a);
-
                     service
                         .getCharacteristic(Characteristic.CurrentTemperature)
                         .updateValue((parseFloat(msg.values[0]) + parseFloat(msg.values[1])) / 2);
 
                     service
                         .getCharacteristic(Characteristic.CurrentHeaterCoolerState)
-                        .updateValue(Math.abs(msg.values[0] - msg.values[1]) > .75
+                        .updateValue((msg.values[0] - msg.values[1]) > .75
                             ? Characteristic.CurrentHeaterCoolerState.HEATING
                             : Characteristic.CurrentHeaterCoolerState.IDLE);
                 }

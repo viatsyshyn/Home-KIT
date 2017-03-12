@@ -293,21 +293,21 @@ void climateProbeValues() {
 
   Serial.println("done");
   
-  if (isnan(h)) {
-    h = 0;
-  }
-  if (isnan(t)) {
-    t = -127;
-  }
-  if (isnan(hic)) {
-    hic = -127;
-  }
-  
   StaticJsonBuffer<200> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
-  root["temperature"] = t;
-  root["humidity"] = h;
-  root["heat-index"] = hic;
+  
+  if (!isnan(h)) {
+    root["humidity"] = h;
+  }
+  
+  if (!isnan(t)) {
+    root["temperature"] = t;
+  }
+  
+  if (!isnan(hic)) {
+    root["heat-index"] = hic;
+  }
+  
   root["harmful-gases"] = gas;
   
   char buffer[256];

@@ -18,6 +18,8 @@ hap.init();
 
 const uuid = hap.uuid;
 const Accessory = hap.Accessory;
+const Service = hap.Service;
+const Characteristic = hap.Characteristic;
 
 // Our Accessories will each have their own HAP server; we will assign ports sequentially
 var targetPort = config.port || 51827;
@@ -29,6 +31,12 @@ var bridgeUUID = uuid.generate('hap-nodejs:accessories:homekit-dridge');
 
 // This is the Accessory that we'll return to HAP-NodeJS that represents our fake lock.
 var bridge = new Accessory(config.name || 'HomeKitBridge', bridgeUUID);
+
+bridge
+    .getService(Service.AccessoryInformation)
+    .setCharacteristic(Characteristic.Manufacturer, "SmartHome LLC")
+    .setCharacteristic(Characteristic.Model, "HomeKit Bridge Prototype A")
+    .setCharacteristic(Characteristic.SerialNumber, "HKB-PTA-0.0.1");
 
 // Add properties for publishing (in case we're using Core.js and not BridgedCore.js)
 bridge.username = config.MAC;

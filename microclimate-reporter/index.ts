@@ -25,6 +25,7 @@ module.exports = (hap, mqtt, info) =>
     // We can see the complete list of Services and Characteristics in `lib/gen/HomeKitTypes.js`
     sensor.addService(Service.TemperatureSensor);
     sensor.addService(Service.HumiditySensor);
+    sensor.addService(Service.AirQualitySensor);
 
     const sub_topic = `${item_id}/reported`;
 
@@ -48,15 +49,26 @@ module.exports = (hap, mqtt, info) =>
             }
 
             if (msg && sub_topic === topic) {
-                sensor
-                    .getService(Service.TemperatureSensor)
-                    .getCharacteristic(Characteristic.CurrentTemperature)
-                    .updateValue(msg.temperature);
+                if (msg.temperature != null) {
+                    sensor
+                        .getService(Service.TemperatureSensor)
+                        .getCharacteristic(Characteristic.CurrentTemperature)
+                        .updateValue(msg.temperature);
+                }
 
-                sensor
-                    .getService(Service.HumiditySensor)
-                    .getCharacteristic(Characteristic.CurrentRelativeHumidity)
-                    .updateValue(msg.humidity);
+                if (msg.humidity != null) {
+                    sensor
+                        .getService(Service.HumiditySensor)
+                        .getCharacteristic(Characteristic.CurrentRelativeHumidity)
+                        .updateValue(msg.humidity);
+                }
+
+                if (msg['harmful-gases'] != null) {
+                    sensor
+                        .getService(Service.AirQualitySensor)
+                        .getCharacteristic(Characteristic.AirQuality)
+                        .updateValue(Math.ceil(msg['harmful-gases']));
+                }
             }
         });
 
