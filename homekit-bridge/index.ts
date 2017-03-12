@@ -22,15 +22,15 @@ const Service = hap.Service;
 const Characteristic = hap.Characteristic;
 
 // Our Accessories will each have their own HAP server; we will assign ports sequentially
-var targetPort = config.port || 51827;
+let targetPort = config.port || 51827;
 
 // Generate a consistent UUID for our Temperature Sensor Accessory that will remain the same
 // even when restarting our server. We use the `uuid.generate` helper function to create
 // a deterministic UUID based on an arbitrary "namespace" and the string "temperature-sensor".
-var bridgeUUID = uuid.generate('hap-nodejs:accessories:homekit-dridge');
+const bridgeUUID = uuid.generate('hap-nodejs:accessories:homekit-dridge');
 
 // This is the Accessory that we'll return to HAP-NodeJS that represents our fake lock.
-var bridge = new Accessory(config.name || 'HomeKitBridge', bridgeUUID);
+const bridge = new Accessory(config.name || 'HomeKitBridge', bridgeUUID);
 
 bridge
     .getService(Service.AccessoryInformation)
@@ -48,7 +48,7 @@ bridge.on('identify', (paired, callback) => {
     callback(); // success
 });
 
-var signals = { 'SIGINT': 2, 'SIGTERM': 15 };
+const signals = { 'SIGINT': 2, 'SIGTERM': 15 };
 Object.keys(signals).forEach( signal =>
     process.on(signal, () => {
         console.info("Got %s, shutting down Homebridge...", signal);
