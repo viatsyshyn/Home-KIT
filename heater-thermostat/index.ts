@@ -1,5 +1,5 @@
 import {inherits} from 'util';
-import * as async from 'async';
+import * as scheduler from 'node-schedule';
 
 interface IConfig {
     microclimateMqttId: string;
@@ -14,6 +14,8 @@ module.exports = (hap, mqtt, info, redis) => {
     const Characteristic = hap.Characteristic;
 
     const item_id = info.mqttId;
+
+    const schedule = require('./config.json');
 
     // Generate a consistent UUID for our Temperature Sensor Accessory that will remain the same
     // even when restarting our server. We use the `uuid.generate` helper function to create
@@ -124,6 +126,7 @@ module.exports = (hap, mqtt, info, redis) => {
                 .value;
 
         switch (targetMode) {
+            case Characteristic.TargetHeatingCoolingState.HEAT:
             case Characteristic.TargetHeatingCoolingState.AUTO:
                 if (currentTemp < (targetTemp - threshold)) {
                     mqtt.publish(heater_pub_topic, JSON.stringify({
@@ -139,12 +142,6 @@ module.exports = (hap, mqtt, info, redis) => {
 
                 break;
 
-            case Characteristic.TargetHeatingCoolingState.HEAT:
-                mqtt.publish(heater_pub_topic, JSON.stringify({
-                    active: heater_target_state = true
-                }));
-                break;
-
             case Characteristic.TargetHeatingCoolingState.COOL:
             case Characteristic.TargetHeatingCoolingState.OFF:
             default:
@@ -155,7 +152,31 @@ module.exports = (hap, mqtt, info, redis) => {
         }
     }
 
+    function changeTemperatureByScheduler(temperature) {
+        const targetMode = controller
+            .getService(Service.Thermostat)
+            .getCharacteristic(Characteristic.TargetHeatingCoolingState)
+            .value;
+
+        if (targetMode !== Characteristic.TargetHeatingCoolingState.AUTO) {
+            return;
+        }
+
+        controller
+            .getService(Service.Thermostat)
+            .getCharacteristic(Characteristic.TargetTemperature)
+            .updateValue(temperature);
+    }
+
     let timer_ = setTimeout(() => controller.updateReachability(true), 500);
+
+    Object.keys(schedule).forEach(job => {
+        let temperature = schedule[job];
+        scheduler.scheduleJob(job, () => {
+            console.log('SCHEDULE', job, temperature);
+            changeTemperatureByScheduler(temperature)
+        })
+    });
 
     mqtt.subscribe(microclimate_sub_topic)
         .subscribe(heater_sub_topic)

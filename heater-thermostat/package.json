@@ -15,5 +15,8 @@
   "bugs": {
     "url": "https://github.com/viatsyshyn/Home-KIT/issues"
   },
-  "homepage": "https://github.com/viatsyshyn/Home-KIT#readme"
+  "homepage": "https://github.com/viatsyshyn/Home-KIT#readme",
+  "dependencies": {
+    "node-schedule": "^1.2.0"
+  }
 }
