@@ -11,6 +11,7 @@ export interface IConfig {
     port?: number;
     name?: string;
     storage?: string;
+    cache: string;
 
     accessories: IAccessory[];
 }

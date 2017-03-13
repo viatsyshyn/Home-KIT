@@ -1,11 +1,12 @@
 import {inherits} from 'util';
+import * as async from 'async';
 
 interface IConfig {
     microclimateMqttId: string;
     heaterMqttId: string;
 }
 
-module.exports = (hap, mqtt, info) => {
+module.exports = (hap, mqtt, info, redis) => {
 
     const uuid = hap.uuid;
     const Accessory = hap.Accessory;
@@ -38,6 +39,10 @@ module.exports = (hap, mqtt, info) => {
     const heater_pub_topic = `${config.heaterMqttId}/desired`;
     const heater_sub_topic = `${config.heaterMqttId}/reported`;
 
+    const TargetHeatingCoolingState_KEY = `${item_id}::${Characteristic.TargetHeatingCoolingState.UUID}`;
+    const TargetTemperature_KEY = `${item_id}::${Characteristic.TargetTemperature.UUID}`;
+    const HeatingThresholdTemperature_KEY = `${item_id}::${Characteristic.HeatingThresholdTemperature.UUID}`;
+
     let heater_target_state = null;
 
     controller
@@ -50,6 +55,14 @@ module.exports = (hap, mqtt, info) => {
     controller
         .getService(Service.Thermostat)
         .getCharacteristic(Characteristic.TargetTemperature)
+        .on('get', (callback) => {
+            redis.get(TargetTemperature_KEY, (err, value) => {
+                callback(err, Math.max(10, parseInt(value, 10)))
+            });
+        })
+        .on('set', (newValue, callback) => {
+            redis.set(TargetTemperature_KEY, newValue, callback);
+        })
         .on('change', event => {
             changeHeaterState(event);
         });
@@ -57,6 +70,29 @@ module.exports = (hap, mqtt, info) => {
     controller
         .getService(Service.Thermostat)
         .getCharacteristic(Characteristic.TargetHeatingCoolingState)
+        .on('get', (callback) => {
+            redis.get(TargetHeatingCoolingState_KEY, (err, value) => {
+                callback(err, parseInt(value, 10))
+            });
+        })
+        .on('set', (newValue, callback) => {
+            redis.set(TargetHeatingCoolingState_KEY, newValue, callback);
+        })
+        .on('change', event => {
+            changeHeaterState(event);
+        });
+
+    controller
+        .getService(Service.Thermostat)
+        .getCharacteristic(Characteristic.HeatingThresholdTemperature)
+        .on('get', (callback) => {
+            redis.get(HeatingThresholdTemperature_KEY, (err, value) => {
+                callback(err, value < .1 ? .2 : value)
+            });
+        })
+        .on('set', (newValue, callback) => {
+            redis.set(HeatingThresholdTemperature_KEY, newValue, callback);
+        })
         .on('change', event => {
             changeHeaterState(event);
         });
@@ -82,15 +118,20 @@ module.exports = (hap, mqtt, info) => {
                 .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
                 .value;
 
+        const threshold = controller
+                .getService(Service.Thermostat)
+                .getCharacteristic(Characteristic.HeatingThresholdTemperature)
+                .value;
+
         switch (targetMode) {
             case Characteristic.TargetHeatingCoolingState.AUTO:
-                if (currentTemp < targetTemp - .25) {
+                if (currentTemp < (targetTemp - threshold)) {
                     mqtt.publish(heater_pub_topic, JSON.stringify({
                         active: heater_target_state = true
                     }));
                 }
 
-                if (currentTemp > targetTemp + .25) {
+                if (currentTemp > (targetTemp + threshold)) {
                     mqtt.publish(heater_pub_topic, JSON.stringify({
                         active: heater_target_state = false
                     }));
@@ -107,7 +148,6 @@ module.exports = (hap, mqtt, info) => {
             case Characteristic.TargetHeatingCoolingState.COOL:
             case Characteristic.TargetHeatingCoolingState.OFF:
             default:
-                
                 mqtt.publish(heater_pub_topic, JSON.stringify({
                     active: heater_target_state = false
                 }));
@@ -115,7 +155,7 @@ module.exports = (hap, mqtt, info) => {
         }
     }
 
-    let timer_ = setTimeout(() => controller.updateReachability(true), 50);
+    let timer_ = setTimeout(() => controller.updateReachability(true), 500);
 
     mqtt.subscribe(microclimate_sub_topic)
         .subscribe(heater_sub_topic)
@@ -149,17 +189,6 @@ module.exports = (hap, mqtt, info) => {
                     .updateValue(msg.active
                         ? Characteristic.CurrentHeaterCoolerState.HEATING
                         : Characteristic.CurrentHeaterCoolerState.IDLE);
-
-            }
-
-            if (msg && heater_sub_topic === topic
-                && typeof msg.active === 'boolean'
-                && heater_target_state != null
-                && heater_target_state !== msg.active) {
-
-                mqtt.publish(heater_pub_topic, JSON.stringify({
-                    active: heater_target_state
-                }));
 
             }
         });

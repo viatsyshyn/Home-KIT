@@ -27,6 +27,12 @@ module.exports = (hap, mqtt, info) => {
     // We can see the complete list of Services and Characteristics in `lib/gen/HomeKitTypes.js`
     const service = controller.addService(Service.HeaterCooler, "Heater");
 
+    controller
+        .addService(Service.Outlet)
+        .setCharacteristic(Characteristic.OutletInUse, true);
+
+    controller.addService(Service.TemperatureSensor);
+
     const sub_topic = `${item_id}/reported`;
     const pub_topic = `${item_id}/desired`;
 
@@ -35,6 +41,15 @@ module.exports = (hap, mqtt, info) => {
         .on('change', event => {
             mqtt.publish(pub_topic, JSON.stringify({
                 active: event.newValue == Characteristic.Active.ACTIVE
+            }));
+        });
+
+    controller
+        .getService(Service.Outlet)
+        .getCharacteristic(Characteristic.On)
+        .on('change', event => {
+            mqtt.publish(pub_topic, JSON.stringify({
+                active: event.newValue
             }));
         });
 
@@ -65,18 +80,36 @@ module.exports = (hap, mqtt, info) => {
                             ? Characteristic.Active.ACTIVE
                             : Characteristic.Active.INACTIVE);
 
+                    controller
+                        .getService(Service.Outlet)
+                        .getCharacteristic(Characteristic.On)
+                        .updateValue(msg.active);
                 }
 
                 if (Array.isArray(msg.values) && msg.values.length == 2) {
+                    let avg_temp = (parseFloat(msg.values[0]) + parseFloat(msg.values[1])) / 2;
+
+                    controller
+                        .getService(Service.TemperatureSensor)
+                        .getCharacteristic(Characteristic.CurrentTemperature)
+                        .updateValue(avg_temp);
+
                     service
                         .getCharacteristic(Characteristic.CurrentTemperature)
-                        .updateValue((parseFloat(msg.values[0]) + parseFloat(msg.values[1])) / 2);
+                        .updateValue(avg_temp);
+
+                    let is_in_use = (msg.values[0] - msg.values[1]) > .75;
 
                     service
                         .getCharacteristic(Characteristic.CurrentHeaterCoolerState)
-                        .updateValue((msg.values[0] - msg.values[1]) > .75
+                        .updateValue(is_in_use
                             ? Characteristic.CurrentHeaterCoolerState.HEATING
                             : Characteristic.CurrentHeaterCoolerState.IDLE);
+
+                    controller
+                        .getService(Service.Outlet)
+                        .getCharacteristic(Characteristic.OutletInUse)
+                        .updateValue(is_in_use);
                 }
             }
         });

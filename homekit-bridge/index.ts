@@ -2,6 +2,7 @@ import * as hap from 'hap-nodejs';
 import * as process from 'process';
 import * as mqtt from 'mqtt';
 import * as fs from 'fs';
+import * as Redis from 'redis';
 import {
     IConfig
 } from 'config.d.ts';
@@ -57,6 +58,8 @@ Object.keys(signals).forEach( signal =>
     }));
 
 const mosquittoUrl = config.MQTT;
+const redisUrl = config.cache;
+const mongoUrl = config.storage;
 let storage = null;
 
 const mqttClient = mqtt
@@ -64,30 +67,47 @@ const mqttClient = mqtt
     .on('connect', () => {
         console.log(`Connected to ${mosquittoUrl}`);
 
-        // Add them all to the bridge
-        config.accessories
-            .map(info => require(info.package)(hap, mqttClient, info))
-            .forEach(accessory => bridge.addBridgedAccessory(accessory));
+        const redis = Redis.createClient(redisUrl);
 
-        bridge
-            .publish({
-                port: targetPort++,
-                username: bridge.username,
-                pincode: bridge.pincode,
-                category: Accessory.Categories.BRIDGE
-            });
+        redis.on('connect', () => {
+            console.log(`Connected to ${redisUrl}`);
 
-        if (config.storage) {
-            MongoClient.connect(config.storage, (err, db) => {
-                if (err)
-                    throw err;
-                console.log(`Connected to ${config.storage}`);
+            const redis_w = {
+                get: (key, callback) => {
+                    redis.get(key, callback);
+                },
 
-                mqttClient.subscribe('#');
+                set: (key, value, callback) => {
+                    redis.set(key, value, callback);
+                }
+            };
 
-                storage = db.collection('events');
-            });
-        }
+            // Add them all to the bridge
+            config.accessories
+                .map(info => require(info.package)(hap, mqttClient, info, redis_w))
+                .forEach(accessory => bridge.addBridgedAccessory(accessory));
+
+            bridge
+                .publish({
+                    port: targetPort++,
+                    username: bridge.username,
+                    pincode: bridge.pincode,
+                    category: Accessory.Categories.BRIDGE
+                });
+
+            if (mongoUrl) {
+                MongoClient.connect(mongoUrl, (err, db) => {
+                    if (err)
+                        throw err;
+                    console.log(`Connected to ${mongoUrl}`);
+
+                    mqttClient.subscribe('#');
+
+                    storage = db.collection('events');
+                });
+            }
+
+        });
     })
     .on('error', console.error)
     .on('message', (topic, message) => {

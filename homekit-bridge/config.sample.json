@@ -5,6 +5,7 @@
   "port": 51827,
   "name": "MyHomeKit",
   "storage": "mongodb://localhost:27017/homekit",
+  "cache": "redis://localhost:6379",
 
   "accessories": [{
     "package": "./sample-accessory.js",

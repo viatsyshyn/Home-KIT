@@ -17,7 +17,8 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-#define BUS_ONE_WIRE D7
+#define BUS_ONE_WIRE_1 D7
+#define BUS_ONE_WIRE_2 D4
 
 #define BUS_RELAY_IN1 D5
 #define BUS_RELAY_IN2 D6
@@ -25,8 +26,11 @@
 WiFiClient client;
 PubSubClient mqtt;
 
-OneWire oneWire(BUS_ONE_WIRE);
-DallasTemperature sensors(&oneWire);
+OneWire oneWire1(BUS_ONE_WIRE_1);
+DallasTemperature sensors1(&oneWire1);
+
+OneWire oneWire2(BUS_ONE_WIRE_2);
+DallasTemperature sensors2(&oneWire2);
 
 ThreadController controller = ThreadController();
 Thread thermThread = Thread();
@@ -186,7 +190,8 @@ void setup() {
   thermPublish(state);
   Serial.println(" done");
 
-  sensors.begin();
+  sensors1.begin();
+  sensors2.begin();
 }
 
 void loop() {
@@ -319,19 +324,20 @@ void thermUpdateRelay(byte* payload) {
 
 void thermProbeValues() {
   Serial.print("Requesting temperatures... ");
-  sensors.requestTemperatures(); // Send the command to get temperatures
+  sensors1.requestTemperatures(); // Send the command to get temperatures
+  sensors2.requestTemperatures(); // Send the command to get temperatures
   Serial.println("done");
 
   StaticJsonBuffer<200> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
   JsonArray& data = root.createNestedArray("values");
   
-  float temp1 = sensors.getTempCByIndex(0);
+  float temp1 = sensors1.getTempCByIndex(0);
   data.add(temp1);
   Serial.print("Device 1: ");
   Serial.println(temp1); 
   
-  float temp2 = sensors.getTempCByIndex(1);
+  float temp2 = sensors2.getTempCByIndex(0);
   data.add(temp2);
   Serial.print("Device 2: ");
   Serial.println(temp2);    
