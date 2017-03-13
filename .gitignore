@@ -1,0 +1,9 @@
+.*/*
+*/.*/*
+*/node_modules/*
+*/*.js.map
+*/keys/*
+**/*.js
+**/config.json
+**/config.h
+**/persist/*
