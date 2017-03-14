@@ -1,0 +1,4 @@
+{
+  "storage": "mongodb://localhost:27017/homekit",
+  "port": 8080
+}
