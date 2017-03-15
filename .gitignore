@@ -1,8 +1,8 @@
 .*/*
 */.*/*
 */node_modules/*
-*/*.js.map
 */keys/*
+**/*.map
 **/*.js
 **/config.json
 **/config.h
