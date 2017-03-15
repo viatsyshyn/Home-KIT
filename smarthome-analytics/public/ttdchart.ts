@@ -12,7 +12,7 @@ Highcharts.chart('ttd', {
         text: 'Livingroom Heater'
     },
     xAxis: [{
-        categories: TT_DATA.map(x => moment(new Date(x.timestamp).toISOString()).format('MMM D HH:mm:ss')),
+        categories: TT_DATA.map(x => moment(x.timestamp).format('MMM D HH:mm:ss')),
         crosshair: true
     }],
     yAxis: [{ // Primary yAxis
