@@ -1,5 +1,8 @@
++function () {
+
 let Highcharts = window.Highcharts || null;
-let TH_DATA : Array = window.TH_DATA || [];
+let TH_DATA: Array = window.TH_DATA || [];
+let moment = window.moment || null;
 
 Highcharts.chart('th', {
     chart: {
@@ -9,7 +12,7 @@ Highcharts.chart('th', {
         text: 'Temperature and Humidity'
     },
     xAxis: [{
-        categories: TH_DATA.map(x => new Date(x.timestamp).toISOString()),
+        categories: TH_DATA.map(x => moment(new Date(x.timestamp).toISOString()).format('MMM D HH:mm:ss')),
         crosshair: true
     }],
     yAxis: [{ // Primary yAxis
@@ -64,3 +67,5 @@ Highcharts.chart('th', {
         }
     }]
 });
+
+}();

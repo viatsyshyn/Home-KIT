@@ -2,30 +2,21 @@ import * as hap from 'hap-nodejs';
 import * as process from 'process';
 import * as mqtt from 'mqtt';
 import * as Redis from 'redis';
-import * as debugFactory from 'debug';
 import {
     IConfig
-} from 'config.d';
-import {
-    ILog
-} from 'log.d';
+} from './config';
 import {
     MongoClient
 } from 'mongodb';
+import {
+    LoggerFactory
+} from './logger';
+
+hap.loggerFactory = LoggerFactory;
 
 const config: IConfig = require('./config.json');
 
-function loggerFactory(ns: string): ILog {
-    return <ILog>{
-        log: debugFactory(`${ns}:log`),
-        info: debugFactory(`${ns}:info`),
-        error: debugFactory(`${ns}:error`)
-    }
-}
-
-hap.loggerFactory = loggerFactory;
-
-const logger = loggerFactory('homekit-bridge');
+const logger = LoggerFactory('homekit-bridge');
 
 logger.log("HomeKit-bridge starting...");
 

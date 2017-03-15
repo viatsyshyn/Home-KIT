@@ -1,15 +1,21 @@
 import {
     MongoClient
 } from 'mongodb';
+import {
+    ILog
+} from './logger';
 
 let storage = null;
+let logger = null;
 
-export function init(mongoUrl: string, callback) {
+export function init(logger_: ILog, mongoUrl: string, callback) {
+    logger = logger_;
+
     MongoClient.connect(mongoUrl, (err, db) => {
         if (err)
             throw err;
 
-        console.log(`Connected to ${mongoUrl}`);
+        logger.info(`Connected to ${mongoUrl}`);
 
         storage = db.collection('events');
         callback();
@@ -57,8 +63,8 @@ export function getTemperatureInOut(start: Date, end: Date, device: string): ITe
         .map(function (y){
             return <ITemperatureInOut>{
                 timestamp: y.timestamp,
-                temperatureIn: y.message.values[0] < 0 ? null : y.message.values[0],
-                temperatureOut: y.message.values[1] < 0 || y.message.values[1] > 60 ? null : y.message.values[1]
+                temperatureIn: y.message.values[0] < -100 ? null : y.message.values[0],
+                temperatureOut: y.message.values[1] < -100 ? null : y.message.values[1]
             }
         })
         .toArray();
@@ -78,7 +84,7 @@ export function getTemperatureOnOff(start: Date, end: Date, device: string): IDe
             "timestamp": {$gt: start.getTime(), $lt: end.getTime()}
         })
         .map(function (z){
-            return <ITemperatureHumidity>{
+            return <IDeviceOnOff>{
                 timestamp: z.timestamp,
                 active: z.message.active
             }

@@ -1,5 +1,8 @@
++function () {
+
 let Highcharts = window.Highcharts || null;
-let TT_DATA : Array = window.TT_DATA || [];
+let TT_DATA: Array = window.TT_DATA || [];
+let moment = window.moment || null;
 
 Highcharts.chart('ttd', {
     chart: {
@@ -9,7 +12,7 @@ Highcharts.chart('ttd', {
         text: 'Temperature and Temperature'
     },
     xAxis: [{
-        categories: TT_DATA.map(y => new Date(y.timestamp).toISOString()),
+        categories: TT_DATA.map(x => moment(new Date(x.timestamp).toISOString()).format('MMM D HH:mm:ss')),
         crosshair: true
     }],
     yAxis: [{ // Primary yAxis
@@ -20,22 +23,22 @@ Highcharts.chart('ttd', {
             }
         },
         title: {
-            text: 'TemperatureIn',
+            text: 'Temperature',
             style: {
                 color: Highcharts.getOptions().colors[1]
             }
         }
     }, { // Secondary yAxis
         title: {
-            text: 'TemperatureOut',
+            text: 'Active',
             style: {
-                color: Highcharts.getOptions().colors[0]
+                color: Highcharts.getOptions().colors[2]
             }
         },
         labels: {
-            format: '{value} C',
+            format: '{value}',
             style: {
-                color: Highcharts.getOptions().colors[0]
+                color: Highcharts.getOptions().colors[2]
             }
         },
         opposite: true
@@ -47,16 +50,15 @@ Highcharts.chart('ttd', {
         enabled: false
     },
     series: [{
-        name: 'TemperatureIn',
+        name: 'Temperature In',
         type: 'spline',
-        yAxis: 1,
         data: TT_DATA.map(y => y.temperatureIn),
         tooltip: {
             valueSuffix: 'C'
         }
 
     }, {
-        name: 'TemperatureOut',
+        name: 'Temperature Out',
         type: 'spline',
         data: TT_DATA.map(y => y.temperatureOut),
         tooltip: {
@@ -64,3 +66,5 @@ Highcharts.chart('ttd', {
         }
     }]
 });
+
+}();
