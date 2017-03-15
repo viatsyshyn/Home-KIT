@@ -75,12 +75,12 @@ export interface IDeviceOnOff {
     active: boolean
 }
 
-export function getTemperatureOnOff(start: Date, end: Date, device: string): IDeviceOnOff[] {
+export function getDeviceOnOff(start: Date, end: Date, device: string): IDeviceOnOff[] {
     return storage
         .find({
             "state": "reported",
             "device": device,
-            "message.temperature": {$gt:0},
+            "message.active": {$exists: true},
             "timestamp": {$gt: start.getTime(), $lt: end.getTime()}
         })
         .map(function (z){
