@@ -9,7 +9,7 @@ Highcharts.chart('th', {
         zoomType: 'xy'
     },
     title: {
-        text: 'Temperature and Humidity'
+        text: 'Livingroom microclimate'
     },
     xAxis: [{
         categories: TH_DATA.map(x => moment(new Date(x.timestamp).toISOString()).format('MMM D HH:mm:ss')),

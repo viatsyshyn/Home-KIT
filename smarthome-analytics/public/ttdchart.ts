@@ -9,7 +9,7 @@ Highcharts.chart('ttd', {
         zoomType: 'xy'
     },
     title: {
-        text: 'Temperature and Temperature'
+        text: 'Livingroom Heater'
     },
     xAxis: [{
         categories: TT_DATA.map(x => moment(new Date(x.timestamp).toISOString()).format('MMM D HH:mm:ss')),
