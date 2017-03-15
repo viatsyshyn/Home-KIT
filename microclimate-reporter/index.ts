@@ -7,6 +7,8 @@ module.exports = (hap, mqtt, info) =>
 
     const item_id = info.mqttId;
 
+    const logger = hap.loggerFactory(item_id);
+
     // Generate a consistent UUID for our Temperature Sensor Accessory that will remain the same
     // even when restarting our server. We use the `uuid.generate` helper function to create
     // a deterministic UUID based on an arbitrary "namespace" and the string "temperature-sensor".
@@ -45,7 +47,7 @@ module.exports = (hap, mqtt, info) =>
             try {
                 msg = JSON.parse(message.toString());
             } catch (e) {
-                return console.error('Parse error', e);
+                return logger.error('Parse error', e);
             }
 
             if (msg && sub_topic === topic) {

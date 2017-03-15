@@ -25,6 +25,7 @@
   },
   "homepage": "https://github.com/viatsyshyn/Home-KIT#readme",
   "dependencies": {
+    "debug": "^2.6.3",
     "hap-nodejs": "^0.4.21",
     "mongodb": "^2.2.22",
     "mqtt": "^2.3.0",

@@ -15,6 +15,8 @@ module.exports = (hap, mqtt, info, redis) => {
 
     const item_id = info.mqttId;
 
+    const logger = hap.loggerFactory(item_id);
+
     const schedule = require('./config.json');
 
     // Generate a consistent UUID for our Temperature Sensor Accessory that will remain the same
@@ -165,7 +167,9 @@ module.exports = (hap, mqtt, info, redis) => {
         controller
             .getService(Service.Thermostat)
             .getCharacteristic(Characteristic.TargetTemperature)
-            .updateValue(temperature);
+            .setValue(temperature);
+
+        logger.log('SCHEDULE applied', temperature);
     }
 
     let timer_ = setTimeout(() => controller.updateReachability(true), 500);
@@ -173,7 +177,6 @@ module.exports = (hap, mqtt, info, redis) => {
     Object.keys(schedule).forEach(job => {
         let temperature = schedule[job];
         scheduler.scheduleJob(job, () => {
-            console.log('SCHEDULE', job, temperature);
             changeTemperatureByScheduler(temperature)
         })
     });
@@ -186,7 +189,7 @@ module.exports = (hap, mqtt, info, redis) => {
             try {
                 msg = JSON.parse(message.toString());
             } catch (e) {
-                return console.error('Parse error', e);
+                return logger.error('Parse error', e);
             }
 
             if (msg && microclimate_sub_topic === topic) {

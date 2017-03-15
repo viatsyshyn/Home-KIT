@@ -1,18 +1,33 @@
 import * as hap from 'hap-nodejs';
 import * as process from 'process';
 import * as mqtt from 'mqtt';
-import * as fs from 'fs';
 import * as Redis from 'redis';
+import * as debugFactory from 'debug';
 import {
     IConfig
-} from 'config.d.ts';
+} from 'config.d';
+import {
+    ILog
+} from 'log.d';
 import {
     MongoClient
 } from 'mongodb';
 
-const config: IConfig = JSON.parse(fs.readFileSync('./config.json'));
+const config: IConfig = require('./config.json');
 
-console.log("HomeKit-bridge starting...");
+function loggerFactory(ns: string): ILog {
+    return <ILog>{
+        log: debugFactory(`${ns}:log`),
+        info: debugFactory(`${ns}:info`),
+        error: debugFactory(`${ns}:error`)
+    }
+}
+
+hap.loggerFactory = loggerFactory;
+
+const logger = loggerFactory('homekit-bridge');
+
+logger.log("HomeKit-bridge starting...");
 
 // Initialize our storage system
 hap.init();
@@ -45,14 +60,14 @@ bridge.pincode = config.PIN;
 
 // Listen for bridge identification event
 bridge.on('identify', (paired, callback) => {
-    console.log("Node Bridge identify");
+    logger.log("Node Bridge identify");
     callback(); // success
 });
 
 const signals = { 'SIGINT': 2, 'SIGTERM': 15 };
 Object.keys(signals).forEach( signal =>
     process.on(signal, () => {
-        console.info("Got %s, shutting down Homebridge...", signal);
+        logger.info("Got %s, shutting down Homebridge...", signal);
         bridge.destroy();
         process.exit(128 + signals[signal]);
     }));
@@ -65,12 +80,12 @@ let storage = null;
 const mqttClient = mqtt
     .connect(mosquittoUrl)
     .on('connect', () => {
-        console.log(`Connected to ${mosquittoUrl}`);
+        logger.log(`Connected to ${mosquittoUrl}`);
 
         const redis = Redis.createClient(redisUrl);
 
         redis.on('connect', () => {
-            console.log(`Connected to ${redisUrl}`);
+            logger.log(`Connected to ${redisUrl}`);
 
             const redis_w = {
                 get: (key, callback) => {
@@ -99,7 +114,7 @@ const mqttClient = mqtt
                 MongoClient.connect(mongoUrl, (err, db) => {
                     if (err)
                         throw err;
-                    console.log(`Connected to ${mongoUrl}`);
+                    logger.log(`Connected to ${mongoUrl}`);
 
                     mqttClient.subscribe('#');
 
@@ -109,9 +124,9 @@ const mqttClient = mqtt
 
         });
     })
-    .on('error', console.error)
+    .on('error', logger.error)
     .on('message', (topic, message) => {
-        console.log("RECEIVED:", topic, message.toString(), '\n\n');
+        logger.log("RECEIVED:", topic, message.toString(), '\n\n');
 
         let parts = topic.split('/');
         let state = parts.pop();
@@ -121,7 +136,7 @@ const mqttClient = mqtt
         try {
             msg = JSON.parse(message.toString());
         } catch (e) {
-            return console.error('Parse error', e);
+            return logger.error('Parse error', e);
         }
         storage.insert({
             timestamp: new Date().getTime(),
@@ -131,6 +146,6 @@ const mqttClient = mqtt
             message: msg,
             raw: message.toString()
         }, (err) => {
-            if (err) console.error(err);
+            if (err) logger.error(err);
         })
     });
