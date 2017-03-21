@@ -5,8 +5,25 @@ export function home(db) {
 
         const x = db.getTemperatureHumidity(start, end, "livingroom-microclimate");
         const y = db.getTemperatureInOut(start, end, "livingroom-heater");
+        const z = db.getDeviceOnOff(start, end, "livingroom-heater");
 
-        Promise.all([x,y]).then(result => {
+        Promise.all([x,y,z]).then(result => {
+
+            let ttds: Array = result[1].concat(result[2]);
+            ttds.sort(function(a, b){return a.timestamp-b.timestamp});
+
+            let currentState = null;
+            ttds.reduce((c, z: any) => {
+                if (z.temperatureIn == null && z.active !== undefined) {
+                    currentState = z.active;
+                } else {
+                    z.active = currentState;
+                    c.push(z);
+                }
+
+                return c;
+            }, []);
+
             res.render('index', {
                 start: start,
                 end: end,

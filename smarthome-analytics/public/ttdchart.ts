@@ -1,7 +1,7 @@
 +function () {
 
 let Highcharts = window.Highcharts || null;
-let TT_DATA: Array = window.TT_DATA || [];
+let TTD_DATA: Array = window.TTD_DATA || [];
 let moment = window.moment || null;
 
 Highcharts.chart('ttd', {
@@ -12,7 +12,7 @@ Highcharts.chart('ttd', {
         text: 'Livingroom Heater'
     },
     xAxis: [{
-        categories: TT_DATA.map(x => moment(x.timestamp).format('MMM D HH:mm:ss')),
+        categories: TTD_DATA.map(x => moment(x.timestamp).format('MMM D HH:mm:ss')),
         crosshair: true
     }],
     yAxis: [{ // Primary yAxis
@@ -52,7 +52,7 @@ Highcharts.chart('ttd', {
     series: [{
         name: 'Temperature In',
         type: 'spline',
-        data: TT_DATA.map(y => y.temperatureIn),
+        data: TTD_DATA.map(y => y.temperatureIn),
         tooltip: {
             valueSuffix: 'C'
         }
@@ -60,10 +60,15 @@ Highcharts.chart('ttd', {
     }, {
         name: 'Temperature Out',
         type: 'spline',
-        data: TT_DATA.map(y => y.temperatureOut),
+        data: TTD_DATA.map(y => y.temperatureOut),
         tooltip: {
             valueSuffix: 'C'
         }
+    }, {
+        data: TTD_DATA.map(z => z.active?1:0),
+        yAxis: 1,
+        step: 'left',
+        name: 'Status'
     }]
 });
 

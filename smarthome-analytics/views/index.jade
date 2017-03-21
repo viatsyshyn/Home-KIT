@@ -4,14 +4,14 @@ html
         script(src="https://code.highcharts.com/highcharts.js")
         script.
             var TH_DATA = !{JSON.stringify(graph1, null, 2)};
-            var TT_DATA = !{JSON.stringify(graph2, null, 2)};
+            var TTD_DATA = !{JSON.stringify(graph2, null, 2)};
 
     body
 
-        div#th(style="min-width: 310px; widht: 100%; height: 50%; margin: 0 auto")
+        div#th(style="min-width: 310px; widht: 100%; height: 450px; margin: 0 auto")
 
         script(src="/thchart.js")
 
-        div#ttd(style="min-width: 310px; widht: 100%; height: 50%; margin: 0 auto")
+        div#ttd(style="min-width: 310px; widht: 100%; height: 450px; margin: 0 auto")
 
         script(src="/ttdchart.js")
