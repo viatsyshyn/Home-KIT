@@ -1,9 +1,8 @@
 import * as scheduler from 'node-schedule';
 
-import {
-    MODE,
-    Aircon
-} from 'daikin-aircon-jslib';
+import {MODE, Aircon} from 'daikin-aircon-jslib';
+import {ILogger} from "../homekit-bridge/api/logger";
+import {IPubSub} from "../homekit-bridge/api/pubsub";
 
 function track_changes(prev, current) {
     return Object
@@ -15,7 +14,7 @@ function track_changes(prev, current) {
         }, {});
 }
 
-export default function DOC2MQTT(logger, mqtt, mqtt_id: string, ac_host: string) {
+export function doc2mqtt(logger: ILogger, mqtt: IPubSub, mqtt_id: string, ac_host: string) {
 
     const ac_reported_topic = `${mqtt_id}/reported`;
 
@@ -23,9 +22,7 @@ export default function DOC2MQTT(logger, mqtt, mqtt_id: string, ac_host: string)
 
     scheduler.scheduleJob('00 * * * * *', () => {
         aircon.get_sensor_info()
-            .then(x => {
-                mqtt.publish(ac_reported_topic, x);
-            })
+            .then(x => mqtt.pub(ac_reported_topic, x))
             .catch(logger.error);
     });
 
@@ -36,7 +33,7 @@ export default function DOC2MQTT(logger, mqtt, mqtt_id: string, ac_host: string)
                 const changes = track_changes(prevState, x);
                 prevState = Object.assign({}, prevState, x);
                 if (Object.keys(changes).length) {
-                    mqtt.publish(ac_reported_topic, changes);
+                    mqtt.pub(ac_reported_topic, changes);
                 }
             })
             .catch(logger.error);
@@ -48,7 +45,7 @@ export default function DOC2MQTT(logger, mqtt, mqtt_id: string, ac_host: string)
                 const changes = track_changes(prevState, x);
                 prevState = Object.assign({}, prevState, x);
                 if (Object.keys(changes).length) {
-                    mqtt.publish(ac_reported_topic, changes);
+                    mqtt.pub(ac_reported_topic, changes);
                 }
             })
             .catch(logger.error);

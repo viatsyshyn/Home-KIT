@@ -1,16 +1,18 @@
 export interface IAccessory {
     module: string;
-    mqttId: string;
+    id: string;
+    zones: string[];
     config?: any;
 }
 
 export interface IConfig {
-    MQTT: string;
     MAC: string;
     PIN: string;
     port?: number;
     name?: string;
-    storage?: string;
+
+    pubsub: string;
+    storage: string;
     cache: string;
 
     accessories: IAccessory[];

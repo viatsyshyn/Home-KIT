@@ -1,22 +1,23 @@
 import {inherits} from 'util';
-import * as scheduler from 'node-schedule';
-import * as bridge from './doc2mqtt';
+import {IRuntime} from "../homekit-bridge/api/runtime";
+import {IAccessory} from "../homekit-bridge/api/config";
+import {doc2mqtt} from "./doc2mqtt";
 
 interface IConfig {
     host: string;
     microclimateMqttId: string;
 }
 
-module.exports = (hap, mqtt, info, redis) => {
+module.exports = (runtime: IRuntime, info: IAccessory) => {
 
-    const uuid = hap.uuid;
-    const Accessory = hap.Accessory;
-    const Service = hap.Service;
-    const Characteristic = hap.Characteristic;
+    const uuid = runtime.uuid;
+    const Accessory = runtime.Accessory;
+    const Service = runtime.Service;
+    const Characteristic = runtime.Characteristic;
 
-    const item_id = info.mqttId;
+    const item_id = info.id;
 
-    const logger = hap.loggerFactory(item_id);
+    const logger = runtime.getLogger(item_id);
 
     const config: IConfig = info.config;
 
@@ -24,7 +25,7 @@ module.exports = (hap, mqtt, info, redis) => {
     const microclimate_sub_topic = `${config.microclimateMqttId}/reported`;
 
     // Setup Diakin Online Controller to MQTT bridge
-    bridge(logger, mqtt, item_id, config.host);
+    doc2mqtt(logger, runtime.pubsub, item_id, config.host);
 
     // Generate a consistent UUID for our Temperature Sensor Accessory that will remain the same
     // even when restarting our server. We use the `uuid.generate` helper function to create
@@ -53,12 +54,16 @@ module.exports = (hap, mqtt, info, redis) => {
         .getService(Service.Thermostat)
         .getCharacteristic(Characteristic.TargetTemperature)
         .on('get', (callback) => {
-            redis.get(TargetTemperature_KEY, (err, value) => {
-                callback(err, Math.max(10, parseInt(value, 10)))
+            runtime.cache
+                .get(TargetTemperature_KEY)
+                .then(value => { callback(null, Math.max(10, parseInt(value, 10)))
+                .catch(err => callback(err));
             });
         })
         .on('set', (newValue, callback) => {
-            redis.set(TargetTemperature_KEY, newValue, callback);
+            runtime.cache
+                .set(TargetTemperature_KEY, newValue)
+                .then(x => callback());
         })
         .on('change', event => {
             changeHeaterState(event);
@@ -68,12 +73,16 @@ module.exports = (hap, mqtt, info, redis) => {
         .getService(Service.Thermostat)
         .getCharacteristic(Characteristic.TargetHeatingCoolingState)
         .on('get', (callback) => {
-            redis.get(TargetHeatingCoolingState_KEY, (err, value) => {
-                callback(err, parseInt(value, 10))
+            runtime.cache
+                .get(TargetHeatingCoolingState_KEY)
+                .then(value => { callback(null, parseInt(value, 10))
+                .catch(err => callback(err));
             });
         })
         .on('set', (newValue, callback) => {
-            redis.set(TargetHeatingCoolingState_KEY, newValue, callback);
+            runtime.cache
+                .set(TargetHeatingCoolingState_KEY, newValue)
+                .then(x => callback());
         })
         .on('change', event => {
             changeHeaterState(event);
@@ -127,46 +136,20 @@ module.exports = (hap, mqtt, info, redis) => {
         })
     });*/
 
-    mqtt.subscribe(ac_sub_topic)
-        .subscribe(microclimate_sub_topic)
-        .on('message', (topic, message) => {
-            let msg = null;
+    runtime.pubsub
+        .sub(ac_sub_topic, () => controller.updateReachability(true))
+        .sub(microclimate_sub_topic, (msg) => {
+            controller
+                .getService(Service.Thermostat)
+                .getCharacteristic(Characteristic.CurrentTemperature)
+                .updateValue(msg.temperature);
 
-            try {
-                msg = JSON.parse(message.toString());
-            } catch (e) {
-                return logger.error('Parse error', e);
-            }
-
-            if (msg && ac_sub_topic === topic) {
-                controller.updateReachability(true);
-            }
-
-            if (msg && microclimate_sub_topic === topic) {
-                controller
-                    .getService(Service.Thermostat)
-                    .getCharacteristic(Characteristic.CurrentTemperature)
-                    .updateValue(msg.temperature);
-
-                controller
-                    .getService(Service.Thermostat)
-                    .getCharacteristic(Characteristic.CurrentRelativeHumidity)
-                    .updateValue(msg.humidity);
-
-            }
-
-            if (msg && heater_sub_topic === topic
-                && typeof msg.active === 'boolean') {
-
-                controller
-                    .getService(Service.Thermostat)
-                    .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
-                    .updateValue(msg.active
-                        ? Characteristic.CurrentHeaterCoolerState.HEATING
-                        : Characteristic.CurrentHeaterCoolerState.IDLE);
-
-            }
-        });
+            controller
+                .getService(Service.Thermostat)
+                .getCharacteristic(Characteristic.CurrentRelativeHumidity)
+                .updateValue(msg.humidity);
+        })
+        ;
 
     return controller;
-}
+};

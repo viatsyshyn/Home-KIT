@@ -1,5 +1,7 @@
 import {inherits} from 'util';
 import * as scheduler from 'node-schedule';
+import {IRuntime} from "../homekit-bridge/api/runtime";
+import {IAccessory} from "../homekit-bridge/api/config";
 
 interface IConfig {
     microclimateMqttId: string;
@@ -7,16 +9,14 @@ interface IConfig {
     schedule: any;
 }
 
-module.exports = (hap, mqtt, info, redis) => {
+module.exports = (runtime: IRuntime, info: IAccessory) => {
 
-    const uuid = hap.uuid;
-    const Accessory = hap.Accessory;
-    const Service = hap.Service;
-    const Characteristic = hap.Characteristic;
+    const uuid = runtime.uuid;
+    const Accessory = runtime.Accessory;
+    const Service = runtime.Service;
+    const Characteristic = runtime.Characteristic;
 
-    const item_id = info.mqttId;
-
-    const logger = hap.loggerFactory(item_id);
+    const item_id = info.id;
 
     // Generate a consistent UUID for our Temperature Sensor Accessory that will remain the same
     // even when restarting our server. We use the `uuid.generate` helper function to create
@@ -41,67 +41,67 @@ module.exports = (hap, mqtt, info, redis) => {
     const microclimate_sub_topic = `${config.microclimateMqttId}/reported`;
     const heater_pub_topic = `${config.heaterMqttId}/desired`;
     const heater_sub_topic = `${config.heaterMqttId}/reported`;
-    const schedule = info.schedule;
+    const schedule = config.schedule;
 
     const TargetHeatingCoolingState_KEY = `${item_id}::${Characteristic.TargetHeatingCoolingState.UUID}`;
     const TargetTemperature_KEY = `${item_id}::${Characteristic.TargetTemperature.UUID}`;
     const HeatingThresholdTemperature_KEY = `${item_id}::${Characteristic.HeatingThresholdTemperature.UUID}`;
 
-    let heater_target_state = null;
-
     controller
         .getService(Service.Thermostat)
         .getCharacteristic(Characteristic.CurrentTemperature)
-        .on('change', event => {
-            changeHeaterState(event);
-        });
+        .on('change', changeHeaterState);
 
     controller
         .getService(Service.Thermostat)
         .getCharacteristic(Characteristic.TargetTemperature)
         .on('get', (callback) => {
-            redis.get(TargetTemperature_KEY, (err, value) => {
-                callback(err, Math.max(10, parseInt(value, 10)))
-            });
+            runtime.cache
+                .get(TargetTemperature_KEY)
+                .then(value => callback(null, Math.max(10, parseInt(value, 10))))
+                .catch(err => callback(err));
         })
         .on('set', (newValue, callback) => {
-            redis.set(TargetTemperature_KEY, newValue, callback);
+            runtime.cache
+                .set(TargetTemperature_KEY, newValue)
+                .then(x => callback());
         })
-        .on('change', event => {
-            changeHeaterState(event);
-        });
+        .on('change', changeHeaterState);
 
     controller
         .getService(Service.Thermostat)
         .getCharacteristic(Characteristic.TargetHeatingCoolingState)
         .on('get', (callback) => {
-            redis.get(TargetHeatingCoolingState_KEY, (err, value) => {
-                callback(err, parseInt(value, 10))
-            });
+            runtime.cache
+                .get(TargetHeatingCoolingState_KEY)
+                .then(value => callback(null, parseInt(value, 10)))
+                .catch(err => callback(err));
         })
         .on('set', (newValue, callback) => {
-            redis.set(TargetHeatingCoolingState_KEY, newValue, callback);
+            runtime.cache
+                .set(TargetHeatingCoolingState_KEY, newValue)
+                .then(x => callback());
         })
-        .on('change', event => {
-            changeHeaterState(event);
-        });
+        .on('change', changeHeaterState);
+
 
     controller
         .getService(Service.Thermostat)
         .getCharacteristic(Characteristic.HeatingThresholdTemperature)
         .on('get', (callback) => {
-            redis.get(HeatingThresholdTemperature_KEY, (err, value) => {
-                callback(err, value < .1 ? .2 : value)
-            });
+            runtime.cache
+                .get(HeatingThresholdTemperature_KEY)
+                .then(value => callback(null, parseInt(value, 10)))
+                .catch(err => callback(err));
         })
         .on('set', (newValue, callback) => {
-            redis.set(HeatingThresholdTemperature_KEY, newValue, callback);
+            runtime.cache
+                .set(HeatingThresholdTemperature_KEY, newValue)
+                .then(x => callback());
         })
-        .on('change', event => {
-            changeHeaterState(event);
-        });
+        .on('change', changeHeaterState);
 
-    function changeHeaterState(event) {
+    function changeHeaterState() {
         const currentTemp = controller
                 .getService(Service.Thermostat)
                 .getCharacteristic(Characteristic.CurrentTemperature)
@@ -117,11 +117,6 @@ module.exports = (hap, mqtt, info, redis) => {
                 .getCharacteristic(Characteristic.TargetHeatingCoolingState)
                 .value;
 
-        const currentState = controller
-                .getService(Service.Thermostat)
-                .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
-                .value;
-
         const threshold = controller
                 .getService(Service.Thermostat)
                 .getCharacteristic(Characteristic.HeatingThresholdTemperature)
@@ -131,15 +126,11 @@ module.exports = (hap, mqtt, info, redis) => {
             case Characteristic.TargetHeatingCoolingState.HEAT:
             case Characteristic.TargetHeatingCoolingState.AUTO:
                 if (currentTemp < (targetTemp - threshold)) {
-                    mqtt.publish(heater_pub_topic, JSON.stringify({
-                        active: heater_target_state = true
-                    }));
+                    runtime.pubsub.pub(heater_pub_topic, { active: true });
                 }
 
                 if (currentTemp > (targetTemp + threshold)) {
-                    mqtt.publish(heater_pub_topic, JSON.stringify({
-                        active: heater_target_state = false
-                    }));
+                    runtime.pubsub.pub(heater_pub_topic, { active: false });
                 }
 
                 break;
@@ -147,9 +138,8 @@ module.exports = (hap, mqtt, info, redis) => {
             case Characteristic.TargetHeatingCoolingState.COOL:
             case Characteristic.TargetHeatingCoolingState.OFF:
             default:
-                mqtt.publish(heater_pub_topic, JSON.stringify({
-                    active: heater_target_state = false
-                }));
+                runtime.pubsub.pub(heater_pub_topic, { active: false });
+
                 break;
         }
     }
@@ -168,11 +158,9 @@ module.exports = (hap, mqtt, info, redis) => {
             .getService(Service.Thermostat)
             .getCharacteristic(Characteristic.TargetTemperature)
             .setValue(temperature);
-
-        logger.log('SCHEDULE applied', temperature);
     }
 
-    let timer_ = setTimeout(() => controller.updateReachability(true), 500);
+    setTimeout(() => controller.updateReachability(true), 500);
 
     Object.keys(schedule).forEach(job => {
         let temperature = schedule[job];
@@ -181,41 +169,28 @@ module.exports = (hap, mqtt, info, redis) => {
         })
     });
 
-    mqtt.subscribe(microclimate_sub_topic)
-        .subscribe(heater_sub_topic)
-        .on('message', (topic, message) => {
-            let msg = null;
+    runtime.pubsub
+        .sub(microclimate_sub_topic, msg => {
+            controller
+                .getService(Service.Thermostat)
+                .getCharacteristic(Characteristic.CurrentTemperature)
+                .updateValue(msg.temperature);
 
-            try {
-                msg = JSON.parse(message.toString());
-            } catch (e) {
-                return logger.error('Parse error', e);
-            }
-
-            if (msg && microclimate_sub_topic === topic) {
-                controller
-                    .getService(Service.Thermostat)
-                    .getCharacteristic(Characteristic.CurrentTemperature)
-                    .updateValue(msg.temperature);
-
-                controller
-                    .getService(Service.Thermostat)
-                    .getCharacteristic(Characteristic.CurrentRelativeHumidity)
-                    .updateValue(msg.humidity);
-            }
-
-            if (msg && heater_sub_topic === topic
-                && typeof msg.active === 'boolean') {
-
+            controller
+                .getService(Service.Thermostat)
+                .getCharacteristic(Characteristic.CurrentRelativeHumidity)
+                .updateValue(msg.humidity);
+        })
+        .sub(heater_sub_topic, msg => {
+            if (typeof msg.active === 'boolean') {
                 controller
                     .getService(Service.Thermostat)
                     .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
                     .updateValue(msg.active
                         ? Characteristic.CurrentHeaterCoolerState.HEATING
                         : Characteristic.CurrentHeaterCoolerState.IDLE);
-
             }
         });
 
     return controller;
-}
+};

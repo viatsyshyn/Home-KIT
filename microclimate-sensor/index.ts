@@ -1,13 +1,14 @@
-module.exports = (hap, mqtt, info) =>
+import {IRuntime} from "../homekit-bridge/api/runtime";
+import {IAccessory} from "../homekit-bridge/api/config";
+
+module.exports = (runtime: IRuntime, info: IAccessory) =>
 {
-    const uuid = hap.uuid;
-    const Accessory = hap.Accessory;
-    const Service = hap.Service;
-    const Characteristic = hap.Characteristic;
+    const uuid = runtime.uuid;
+    const Accessory = runtime.Accessory;
+    const Service = runtime.Service;
+    const Characteristic = runtime.Characteristic;
 
-    const item_id = info.mqttId;
-
-    const logger = hap.loggerFactory(item_id);
+    const item_id = info.id;
 
     // Generate a consistent UUID for our Temperature Sensor Accessory that will remain the same
     // even when restarting our server. We use the `uuid.generate` helper function to create
@@ -33,44 +34,33 @@ module.exports = (hap, mqtt, info) =>
 
     let timer_ = setTimeout(() => sensor.updateReachability(false), 50);
 
-    mqtt.subscribe(sub_topic)
-        .on('message', (topic, message) => {
-            let msg = null;
+    runtime.pubsub
+        .sub(sub_topic, msg => {
 
-            if (topic.substr(0, item_id.length) === item_id) {
-                sensor.updateReachability(true);
+            sensor.updateReachability(true);
 
-                timer_ && clearTimeout(timer_);
-                timer_ = setTimeout(() => sensor.updateReachability(false), 150000);
+            timer_ && clearTimeout(timer_);
+            timer_ = setTimeout(() => sensor.updateReachability(false), 150000);
+
+            if (msg.temperature != null) {
+                sensor
+                    .getService(Service.TemperatureSensor)
+                    .getCharacteristic(Characteristic.CurrentTemperature)
+                    .updateValue(msg.temperature);
             }
 
-            try {
-                msg = JSON.parse(message.toString());
-            } catch (e) {
-                return logger.error('Parse error', e);
+            if (msg.humidity != null) {
+                sensor
+                    .getService(Service.HumiditySensor)
+                    .getCharacteristic(Characteristic.CurrentRelativeHumidity)
+                    .updateValue(msg.humidity);
             }
 
-            if (msg && sub_topic === topic) {
-                if (msg.temperature != null) {
-                    sensor
-                        .getService(Service.TemperatureSensor)
-                        .getCharacteristic(Characteristic.CurrentTemperature)
-                        .updateValue(msg.temperature);
-                }
-
-                if (msg.humidity != null) {
-                    sensor
-                        .getService(Service.HumiditySensor)
-                        .getCharacteristic(Characteristic.CurrentRelativeHumidity)
-                        .updateValue(msg.humidity);
-                }
-
-                if (msg['harmful-gases'] != null) {
-                    sensor
-                        .getService(Service.AirQualitySensor)
-                        .getCharacteristic(Characteristic.AirQuality)
-                        .updateValue(Math.ceil(msg['harmful-gases']));
-                }
+            if (msg['harmful-gases'] != null) {
+                sensor
+                    .getService(Service.AirQualitySensor)
+                    .getCharacteristic(Characteristic.AirQuality)
+                    .updateValue(Math.ceil(msg['harmful-gases']));
             }
         });
 

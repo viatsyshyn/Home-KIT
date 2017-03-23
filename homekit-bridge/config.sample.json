@@ -1,15 +1,17 @@
 {
-  "MQTT": "mqtt://127.0.0.1:1883",
   "MAC": "C1:5D:3A:AE:5E:FA",
   "PIC": "031-45-154",
   "port": 51827,
   "name": "MyHomeKit",
+
+  "pubsub": "mqtt://127.0.0.1:1883",
   "storage": "mongodb://localhost:27017/homekit",
   "cache": "redis://localhost:6379",
 
   "accessories": [{
     "package": "./sample-accessory.js",
-    "name": "sample-accessory",
+    "id": "sample-accessory",
+    "zones": ["sample-zone"],
     "params": {}
   }]
 }
