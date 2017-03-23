@@ -4,6 +4,7 @@ import * as scheduler from 'node-schedule';
 interface IConfig {
     microclimateMqttId: string;
     heaterMqttId: string;
+    schedule: any;
 }
 
 module.exports = (hap, mqtt, info, redis) => {
@@ -16,8 +17,6 @@ module.exports = (hap, mqtt, info, redis) => {
     const item_id = info.mqttId;
 
     const logger = hap.loggerFactory(item_id);
-
-    const schedule = require('./config.json');
 
     // Generate a consistent UUID for our Temperature Sensor Accessory that will remain the same
     // even when restarting our server. We use the `uuid.generate` helper function to create
@@ -42,6 +41,7 @@ module.exports = (hap, mqtt, info, redis) => {
     const microclimate_sub_topic = `${config.microclimateMqttId}/reported`;
     const heater_pub_topic = `${config.heaterMqttId}/desired`;
     const heater_sub_topic = `${config.heaterMqttId}/reported`;
+    const schedule = info.schedule;
 
     const TargetHeatingCoolingState_KEY = `${item_id}::${Characteristic.TargetHeatingCoolingState.UUID}`;
     const TargetTemperature_KEY = `${item_id}::${Characteristic.TargetTemperature.UUID}`;
