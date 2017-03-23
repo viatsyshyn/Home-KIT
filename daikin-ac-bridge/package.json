@@ -1,0 +1,23 @@
+{
+  "name": "dainkin-ac-controller",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/viatsyshyn/Home-KIT.git"
+  },
+  "author": "Volodymyr Iatsyshyn <viatsyshyn@gmail.com>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/viatsyshyn/Home-KIT/issues"
+  },
+  "homepage": "https://github.com/viatsyshyn/Home-KIT#readme",
+  "dependencies": {
+    "daikin-aircon-jslib": "git+https://github.com/viatsyshyn/daikin-aircon-jslib.git",
+    "node-schedule": "^1.2.1"
+  }
+}
