@@ -44,6 +44,7 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
 
     const Schedule_On_KEY = `${item_id}::schedule-enabled`;
     const TargetTemperature_KEY = `${item_id}::${Characteristic.TargetTemperature.UUID}`;
+    const TargetRelativeHumidity_KEY = `${item_id}::${Characteristic.TargetRelativeHumidity.UUID}`;
     const TargetHeatingCoolingState_KEY = `${item_id}::${Characteristic.TargetHeatingCoolingState.UUID}`;
     const HeatingThresholdTemperature_KEY = `${item_id}::${Characteristic.HeatingThresholdTemperature.UUID}`;
     const CoolingThresholdTemperature_KEY = `${item_id}::${Characteristic.CoolingThresholdTemperature.UUID}`;
@@ -138,6 +139,23 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
         })
         .on('change', changeHeaterCoolerState);
 
+    thermostat
+        .getService(Service.Thermostat)
+        .getCharacteristic(Characteristic.TargetRelativeHumidity)
+        .on('get', (callback) => {
+            runtime.cache
+                .get(TargetRelativeHumidity_KEY)
+                .then(value => callback(null, parseInt(value || 50, 10)))
+                .catch(err => callback(err));
+        })
+        .on('set', (newValue, callback) => {
+            runtime.cache
+                .set(TargetRelativeHumidity_KEY, newValue)
+                .then(x => callback());
+        })
+        .on('change', changeHeaterCoolerState);
+
+    const zone_humidifier_dehumidifier_topic = `${info.zones[0]}/humidifier-dehumidifier`;
     const zone_heater_cooler_topic = `${info.zones[0]}/heater-cooler`;
     const zone_climate_topic = `${info.zones[0]}/climate`;
 
@@ -235,6 +253,42 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
             changeTemperatureByScheduler(temperature, Characteristic.TargetHeatingCoolingState.COOL)
         });
     });
+
+    thermostat
+        .getService(Service.Thermostat)
+        .getCharacteristic(Characteristic.CurrentRelativeHumidity)
+        .on('change', changeHumidifierDehumidifierState);
+
+    thermostat
+        .getService(Service.Thermostat)
+        .getCharacteristic(Characteristic.TargetRelativeHumidity)
+        .on('change', changeHumidifierDehumidifierState);
+
+    function changeHumidifierDehumidifierState() {
+        const currentHumidity = thermostat
+            .getService(Service.Thermostat)
+            .getCharacteristic(Characteristic.CurrentRelativeHumidity)
+            .value;
+
+        const targetHumidity = thermostat
+            .getService(Service.Thermostat)
+            .getCharacteristic(Characteristic.TargetRelativeHumidity)
+            .value;
+
+        const threshold = 10;
+
+        let state = null;
+        if (currentHumidity > (targetHumidity + threshold)) {
+            state = -1;
+        }
+
+        if (currentHumidity < (targetHumidity - threshold)) {
+            state = 1;
+        }
+
+        if (state != null)
+            runtime.pubsub.pub(zone_humidifier_dehumidifier_topic, { state: state });
+    }
 
     runtime.pubsub
         .sub(zone_climate_topic, msg => {
