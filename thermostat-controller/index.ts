@@ -4,9 +4,8 @@ import {IRuntime} from "../homekit-bridge/api/runtime";
 import {IAccessory} from "../homekit-bridge/api/config";
 
 interface IConfig {
-    microclimateMqttId: string;
-    heaterMqttId: string;
-    schedule: any;
+    heaterSchedule: Map<string, number>;
+    coolerSchedule: Map<string, number>;
 }
 
 module.exports = (runtime: IRuntime, info: IAccessory) => {
@@ -18,15 +17,19 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
 
     const item_id = info.id;
 
+    if (info.zones.length != 1) {
+        throw new Error(`Thermostat "${item_id}" should have exactly 1 zone`);
+    }
+
     // Generate a consistent UUID for our Temperature Sensor Accessory that will remain the same
     // even when restarting our server. We use the `uuid.generate` helper function to create
     // a deterministic UUID based on an arbitrary "namespace" and the string "temperature-sensor".
     let controllerUUID = uuid.generate(`hap-nodejs:accessories:heater-thermostat:${item_id}`);
 
     // This is the Accessory that we'll return to HAP-NodeJS that represents our fake lock.
-    let controller = new Accessory(`Thermostat (${item_id})`, controllerUUID);
+    let thermostat = new Accessory(`Thermostat (${item_id})`, controllerUUID);
 
-    controller
+    thermostat
         .getService(Service.AccessoryInformation)
         .setCharacteristic(Characteristic.Manufacturer, "SmartHome LLC")
         .setCharacteristic(Characteristic.Model, "Room Thermostat Prototype A")
@@ -34,25 +37,38 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
 
     // Add the actual TemperatureSensor Service.
     // We can see the complete list of Services and Characteristics in `lib/gen/HomeKitTypes.js`
-    controller.addService(Service.Thermostat);
+    thermostat.addService(Service.Thermostat);
+    thermostat.addService(Service.Outlet);
 
     const config: IConfig = info.config;
 
-    const microclimate_sub_topic = `${config.microclimateMqttId}/reported`;
-    const heater_pub_topic = `${config.heaterMqttId}/desired`;
-    const heater_sub_topic = `${config.heaterMqttId}/reported`;
-    const schedule = config.schedule;
-
-    const TargetHeatingCoolingState_KEY = `${item_id}::${Characteristic.TargetHeatingCoolingState.UUID}`;
+    const Schedule_On_KEY = `${item_id}::schedule-enabled`;
     const TargetTemperature_KEY = `${item_id}::${Characteristic.TargetTemperature.UUID}`;
+    const TargetHeatingCoolingState_KEY = `${item_id}::${Characteristic.TargetHeatingCoolingState.UUID}`;
     const HeatingThresholdTemperature_KEY = `${item_id}::${Characteristic.HeatingThresholdTemperature.UUID}`;
+    const CoolingThresholdTemperature_KEY = `${item_id}::${Characteristic.CoolingThresholdTemperature.UUID}`;
 
-    controller
+    thermostat
+        .getService(Service.Outlet)
+        .getCharacteristic(Characteristic.On)
+        .on('get', (callback) => {
+            runtime.cache
+                .get(Schedule_On_KEY)
+                .then(value => callback(null, value)
+                .catch(err => callback(err));
+        })
+        .on('set', (newValue, callback) => {
+            runtime.cache
+                .set(Schedule_On_KEY, newValue)
+                .then(x => callback());
+        });
+
+    thermostat
         .getService(Service.Thermostat)
         .getCharacteristic(Characteristic.CurrentTemperature)
-        .on('change', changeHeaterState);
+        .on('change', changeHeaterCoolerState);
 
-    controller
+    thermostat
         .getService(Service.Thermostat)
         .getCharacteristic(Characteristic.TargetTemperature)
         .on('get', (callback) => {
@@ -66,9 +82,15 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
                 .set(TargetTemperature_KEY, newValue)
                 .then(x => callback());
         })
-        .on('change', changeHeaterState);
+        .on('change', changeHeaterCoolerState)
+        .on('change', (event) => {
+            runtime.pubsub.pub(zone_climate_topic, {
+                by: item_id,
+                targetTemperature: event.newValue
+            })
+        });
 
-    controller
+    thermostat
         .getService(Service.Thermostat)
         .getCharacteristic(Characteristic.TargetHeatingCoolingState)
         .on('get', (callback) => {
@@ -82,16 +104,15 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
                 .set(TargetHeatingCoolingState_KEY, newValue)
                 .then(x => callback());
         })
-        .on('change', changeHeaterState);
+        .on('change', changeHeaterCoolerState);
 
-
-    controller
+    thermostat
         .getService(Service.Thermostat)
         .getCharacteristic(Characteristic.HeatingThresholdTemperature)
         .on('get', (callback) => {
             runtime.cache
                 .get(HeatingThresholdTemperature_KEY)
-                .then(value => callback(null, parseInt(value, 10)))
+                .then(value => callback(null, Math.max(.25, parseFloat(value))))
                 .catch(err => callback(err));
         })
         .on('set', (newValue, callback) => {
@@ -99,98 +120,142 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
                 .set(HeatingThresholdTemperature_KEY, newValue)
                 .then(x => callback());
         })
-        .on('change', changeHeaterState);
+        .on('change', changeHeaterCoolerState);
 
-    function changeHeaterState() {
-        const currentTemp = controller
+    thermostat
+        .getService(Service.Thermostat)
+        .getCharacteristic(Characteristic.CoolingThresholdTemperature)
+        .on('get', (callback) => {
+            runtime.cache
+                .get(CoolingThresholdTemperature_KEY)
+                .then(value => callback(null, Math.max(1, parseFloat(value))))
+                .catch(err => callback(err));
+        })
+        .on('set', (newValue, callback) => {
+            runtime.cache
+                .set(CoolingThresholdTemperature_KEY, newValue)
+                .then(x => callback());
+        })
+        .on('change', changeHeaterCoolerState);
+
+    const zone_heater_cooler_topic = `${info.zones[0]}/heater-cooler`;
+    const zone_climate_topic = `${info.zones[0]}/climate`;
+
+    function changeHeaterCoolerState() {
+        const currentTemp = thermostat
                 .getService(Service.Thermostat)
                 .getCharacteristic(Characteristic.CurrentTemperature)
                 .value;
 
-        const targetTemp = controller
+        const targetTemp = thermostat
                 .getService(Service.Thermostat)
                 .getCharacteristic(Characteristic.TargetTemperature)
                 .value;
 
-        const targetMode = controller
+        const currentMode = thermostat
+                .getService(Service.Thermostat)
+                .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
+                .value;
+
+        const targetMode = thermostat
                 .getService(Service.Thermostat)
                 .getCharacteristic(Characteristic.TargetHeatingCoolingState)
                 .value;
 
-        const threshold = controller
+        let heatingThreshold = thermostat
                 .getService(Service.Thermostat)
                 .getCharacteristic(Characteristic.HeatingThresholdTemperature)
                 .value;
 
+        let coolingThreshold = thermostat
+                .getService(Service.Thermostat)
+                .getCharacteristic(Characteristic.CoolingThresholdTemperature)
+                .value;
+
         switch (targetMode) {
-            case Characteristic.TargetHeatingCoolingState.HEAT:
-            case Characteristic.TargetHeatingCoolingState.AUTO:
-                if (currentTemp < (targetTemp - threshold)) {
-                    runtime.pubsub.pub(heater_pub_topic, { active: true });
-                }
-
-                if (currentTemp > (targetTemp + threshold)) {
-                    runtime.pubsub.pub(heater_pub_topic, { active: false });
-                }
-
+            case Characteristic.TargetHeatingCoolingState.OFF:
+                heatingThreshold = 10;
+                coolingThreshold = 10;
                 break;
 
-            case Characteristic.TargetHeatingCoolingState.COOL:
-            case Characteristic.TargetHeatingCoolingState.OFF:
-            default:
-                runtime.pubsub.pub(heater_pub_topic, { active: false });
+            case Characteristic.TargetHeatingCoolingState.AUTO:
+                heatingThreshold = Math.max(coolingThreshold, heatingThreshold);
+                coolingThreshold = heatingThreshold;
+        }
 
+        let state = null; // OFF
+        switch(currentMode) {
+            case Characteristic.CurrentHeatingCoolingState.OFF:
+                state = (currentTemp < (targetTemp - heatingThreshold)) ? +1 : // HEAT
+                        (currentTemp > (targetTemp + coolingThreshold)) ? -1 : // COOL
+                        0;
+                break;
+
+            case Characteristic.CurrentHeatingCoolingState.HEAT:
+                state = (currentTemp > (targetTemp + heatingThreshold)) ? 0 : null;
+                break;
+
+            case Characteristic.CurrentHeatingCoolingState.COOL:
+                state = (currentTemp < (targetTemp - coolingThreshold)) ? 0 : null;
                 break;
         }
+
+        if (state != null)
+            runtime.pubsub.pub(zone_heater_cooler_topic, { state: state });
     }
 
-    function changeTemperatureByScheduler(temperature) {
-        const targetMode = controller
-            .getService(Service.Thermostat)
-            .getCharacteristic(Characteristic.TargetHeatingCoolingState)
+    function changeTemperatureByScheduler(temperature, appliesToMode) {
+        const targetMode = thermostat
+            .getService(Service.Outlet)
+            .getCharacteristic(Characteristic.On)
             .value;
 
-        if (targetMode !== Characteristic.TargetHeatingCoolingState.AUTO) {
+        if (targetMode !== appliesToMode) {
             return;
         }
 
-        controller
+        thermostat
             .getService(Service.Thermostat)
             .getCharacteristic(Characteristic.TargetTemperature)
             .setValue(temperature);
     }
 
-    setTimeout(() => controller.updateReachability(true), 500);
+    setTimeout(() => thermostat.updateReachability(true), 500);
 
-    Object.keys(schedule).forEach(job => {
-        let temperature = schedule[job];
+    Object.keys(config.heaterSchedule).forEach(job => {
+        let temperature = config.heaterSchedule[job];
         scheduler.scheduleJob(job, () => {
-            changeTemperatureByScheduler(temperature)
-        })
+            changeTemperatureByScheduler(temperature, Characteristic.TargetHeatingCoolingState.HEAT)
+        });
+    });
+
+    Object.keys(config.coolerSchedule).forEach(job => {
+        let temperature = config.coolerSchedule[job];
+        scheduler.scheduleJob(job, () => {
+            changeTemperatureByScheduler(temperature, Characteristic.TargetHeatingCoolingState.COOL)
+        });
     });
 
     runtime.pubsub
-        .sub(microclimate_sub_topic, msg => {
-            controller
+        .sub(zone_climate_topic, msg => {
+            msg.currentTemperature != null && thermostat
                 .getService(Service.Thermostat)
                 .getCharacteristic(Characteristic.CurrentTemperature)
-                .updateValue(msg.temperature);
+                .updateValue(msg.currentTemperature);
 
-            controller
+            msg.currentHumidity != null && thermostat
                 .getService(Service.Thermostat)
                 .getCharacteristic(Characteristic.CurrentRelativeHumidity)
-                .updateValue(msg.humidity);
+                .updateValue(msg.currentHumidity);
         })
-        .sub(heater_sub_topic, msg => {
-            if (typeof msg.active === 'boolean') {
-                controller
-                    .getService(Service.Thermostat)
-                    .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
-                    .updateValue(msg.active
-                        ? Characteristic.CurrentHeaterCoolerState.HEATING
-                        : Characteristic.CurrentHeaterCoolerState.IDLE);
-            }
+        .sub(zone_heater_cooler_topic, msg => {
+            msg.state != null && thermostat
+                .getService(Service.Thermostat)
+                .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
+                .updateValue(msg.state > 0 ? Characteristic.CurrentHeatingCoolingState.HEAT :
+                             msg.state < 0 ? Characteristic.CurrentHeatingCoolingState.COOL
+                                           : Characteristic.CurrentHeatingCoolingState.OFF);
         });
 
-    return controller;
+    return thermostat;
 };

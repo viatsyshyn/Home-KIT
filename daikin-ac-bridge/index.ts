@@ -1,11 +1,10 @@
 import {inherits} from 'util';
 import {IRuntime} from "../homekit-bridge/api/runtime";
 import {IAccessory} from "../homekit-bridge/api/config";
-import {doc2mqtt} from "./doc2mqtt";
+import {doc2mqtt, AirConMode} from "./doc2mqtt";
 
 interface IConfig {
     host: string;
-    microclimateMqttId: string;
 }
 
 module.exports = (runtime: IRuntime, info: IAccessory) => {
@@ -17,12 +16,18 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
 
     const item_id = info.id;
 
+    if (info.zones.length != 1) {
+        throw new Error(`Heater "${item_id}" should have exactly 1 zone`);
+    }
+
     const logger = runtime.getLogger(item_id);
 
     const config: IConfig = info.config;
 
     const ac_sub_topic = `${item_id}/reported`;
-    const microclimate_sub_topic = `${config.microclimateMqttId}/reported`;
+    const zone_heater_cooler_topic = `${info.zones[0]}/heater-cooler`;
+    const zone_humidifier_dehumidifier_topic = `${info.zones[0]}/humidifier-dehumidifier`;
+    const zone_climate_topic = `${info.zones[0]}/climate`;
 
     // Setup Diakin Online Controller to MQTT bridge
     doc2mqtt(logger, runtime.pubsub, item_id, config.host);
@@ -45,111 +50,63 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
     // We can see the complete list of Services and Characteristics in `lib/gen/HomeKitTypes.js`
     controller.addService(Service.HumidifierDehumidifier);
     controller.addService(Service.HeaterCooler);
-    controller.addService(Service.Thermostat);
 
-    const TargetHeatingCoolingState_KEY = `${item_id}::${Characteristic.TargetHeatingCoolingState.UUID}`;
-    const TargetTemperature_KEY = `${item_id}::${Characteristic.TargetTemperature.UUID}`;
+    let timer_ = setTimeout(() => controller.updateReachability(false), 50);
 
-    controller
-        .getService(Service.Thermostat)
-        .getCharacteristic(Characteristic.TargetTemperature)
-        .on('get', (callback) => {
-            runtime.cache
-                .get(TargetTemperature_KEY)
-                .then(value => { callback(null, Math.max(10, parseInt(value, 10)))
-                .catch(err => callback(err));
-            });
-        })
-        .on('set', (newValue, callback) => {
-            runtime.cache
-                .set(TargetTemperature_KEY, newValue)
-                .then(x => callback());
-        })
-        .on('change', event => {
-            changeHeaterState(event);
-        });
+    let heater_cooler_state = 0,
+        humidifier_dehumidifier_state = 0; // OFF
 
-    controller
-        .getService(Service.Thermostat)
-        .getCharacteristic(Characteristic.TargetHeatingCoolingState)
-        .on('get', (callback) => {
-            runtime.cache
-                .get(TargetHeatingCoolingState_KEY)
-                .then(value => { callback(null, parseInt(value, 10))
-                .catch(err => callback(err));
-            });
-        })
-        .on('set', (newValue, callback) => {
-            runtime.cache
-                .set(TargetHeatingCoolingState_KEY, newValue)
-                .then(x => callback());
-        })
-        .on('change', event => {
-            changeHeaterState(event);
-        });
-
-    function changeHeaterState(event) {
-        const targetTemperature = controller
-                .getService(Service.Thermostat)
-                .getCharacteristic(Characteristic.TargetTemperature)
-                .value;
-
-        const targetMode = controller
-                .getService(Service.Thermostat)
-                .getCharacteristic(Characteristic.TargetHeatingCoolingState)
-                .value;
-
-        switch (targetMode) {
-            case Characteristic.TargetHeatingCoolingState.HEAT:
-            case Characteristic.TargetHeatingCoolingState.AUTO:
-            case Characteristic.TargetHeatingCoolingState.COOL:
-            case Characteristic.TargetHeatingCoolingState.OFF:
-            default:
-                break;
-        }
-    }
-
-    function changeTemperatureByScheduler(temperature) {
-        const targetMode = controller
-            .getService(Service.Thermostat)
-            .getCharacteristic(Characteristic.TargetHeatingCoolingState)
-            .value;
-
-        if (targetMode !== Characteristic.TargetHeatingCoolingState.AUTO) {
-            return;
+    function try_change_state() {
+        let pow = heater_cooler_state === 0 && humidifier_dehumidifier_state === 0;
+        let mode = AirConMode.AUTO;
+        if (humidifier_dehumidifier_state < 0)
+            mode = AirConMode.DRY;
+        else if (heater_cooler_state != 0) {
+            mode = heater_cooler_state < 0 ? AirConMode.COOL : AirConMode.HEAT;
         }
 
-        controller
-            .getService(Service.Thermostat)
-            .getCharacteristic(Characteristic.TargetTemperature)
-            .setValue(temperature);
 
-        logger.log('SCHEDULE applied', temperature);
     }
-
-    let timer_ = setTimeout(() => controller.updateReachability(false), 17);
-
-    /*Object.keys(schedule).forEach(job => {
-        let temperature = schedule[job];
-        scheduler.scheduleJob(job, () => {
-            changeTemperatureByScheduler(temperature)
-        })
-    });*/
 
     runtime.pubsub
-        .sub(ac_sub_topic, () => controller.updateReachability(true))
-        .sub(microclimate_sub_topic, (msg) => {
-            controller
-                .getService(Service.Thermostat)
+        .sub(zone_humidifier_dehumidifier_topic, msg => {
+            if (msg.state != null) {
+                humidifier_dehumidifier_state = msg.state;
+                try_change_state();
+            }
+        })
+        .sub(zone_heater_cooler_topic, msg => {
+            if (msg.state != null) {
+                heater_cooler_state = msg.state;
+                try_change_state();
+            }
+        })
+        .sub(ac_sub_topic, () => {
+            controller.updateReachability(true);
+            timer_ && clearTimeout(timer_);
+            timer_ = setTimeout(() => controller.updateReachability(false), 150000);
+        })
+        .sub(zone_climate_topic, (msg) => {
+            msg.currentTemperature != null && controller
+                .getService(Service.HeaterCooler)
                 .getCharacteristic(Characteristic.CurrentTemperature)
-                .updateValue(msg.temperature);
+                .updateValue(msg.currentTemperature);
 
-            controller
+            msg.targetTemperature != null && controller
+                .getService(Service.HeaterCooler)
+                .getCharacteristic(Characteristic.TargetTemperature)
+                .updateValue(msg.targetTemperature);
+
+            msg.currentHumidity != null && controller
                 .getService(Service.Thermostat)
                 .getCharacteristic(Characteristic.CurrentRelativeHumidity)
-                .updateValue(msg.humidity);
-        })
-        ;
+                .updateValue(msg.currentHumidity);
+
+            msg.targetHumidity != null && controller
+                .getService(Service.Thermostat)
+                .getCharacteristic(Characteristic.TargetRelativeHumidity)
+                .updateValue(msg.targetHumidity);
+        });
 
     return controller;
 };
