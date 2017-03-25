@@ -59,8 +59,8 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
         humidifier_dehumidifier_state = 0,
         target_temperature = 0; // OFF
 
-    function try_change_state() {
-        let pow = heater_cooler_state != 0 || humidifier_dehumidifier_state != 0;
+    function try_apply_state() {
+        let pow = heater_cooler_state != 0 || humidifier_dehumidifier_state < 0;
         let mode = AirConMode.AUTO;
         if (humidifier_dehumidifier_state < 0)
             mode = AirConMode.DRY;
@@ -77,23 +77,27 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
     }
 
     runtime.pubsub
-        .sub(zone_humidifier_dehumidifier_topic, msg => {
-            if (msg.state != null) {
-                humidifier_dehumidifier_state = msg.state;
-                try_change_state();
-            }
-        })
-        .sub(zone_heater_cooler_topic, msg => {
-            if (msg.state != null) {
-                heater_cooler_state = msg.state;
-                try_change_state();
-            }
-        })
+        /* update reachability */
         .sub(ac_sub_topic, () => {
             controller.updateReachability(true);
             timer_ && clearTimeout(timer_);
             timer_ = setTimeout(() => controller.updateReachability(false), 150000);
         })
+        /* track H/D state */
+        .sub(zone_humidifier_dehumidifier_topic, msg => {
+            if (msg.state != null) {
+                humidifier_dehumidifier_state = msg.state;
+                try_apply_state();
+            }
+        })
+        /* track H/C state */
+        .sub(zone_heater_cooler_topic, msg => {
+            if (msg.state != null) {
+                heater_cooler_state = msg.state;
+                try_apply_state();
+            }
+        })
+        /* track temperature */
         .sub(zone_climate_topic, (msg) => {
             msg.currentTemperature != null && controller
                 .getService(Service.HeaterCooler)
@@ -103,21 +107,13 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
             if (msg.targetTemperature != null) {
                 target_temperature = msg.targetTemperature;
             }
-            /*msg.targetTemperature != null && controller
-                .getService(Service.HeaterCooler)
-                .getCharacteristic(Characteristic.TargetTemperature)
-                .updateValue(msg.targetTemperature);
-            */
+        })
+        /* track humidity */
+        .sub(zone_climate_topic, (msg) => {
             msg.currentHumidity != null && controller
                 .getService(Service.HumidifierDehumidifier)
                 .getCharacteristic(Characteristic.CurrentRelativeHumidity)
                 .updateValue(msg.currentHumidity);
-
-            /*msg.targetHumidity != null && controller
-                .getService(Service.HumidifierDehumidifier)
-                .getCharacteristic(Characteristic.TargetRelativeHumidity)
-                .updateValue(msg.targetHumidity);
-            */
         });
 
     return controller;
