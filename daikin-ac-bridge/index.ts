@@ -2,6 +2,7 @@ import {inherits} from 'util';
 import {IRuntime} from "../homekit-bridge/api/runtime";
 import {IAccessory} from "../homekit-bridge/api/config";
 import {doc2mqtt, AirConMode} from "./doc2mqtt";
+import {IControlInfo} from "../../daikin-aircon-jslib/connector";
 
 interface IConfig {
     host: string;
@@ -25,6 +26,7 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
     const config: IConfig = info.config;
 
     const ac_sub_topic = `${item_id}/reported`;
+    const ac_pub_topic = `${item_id}/desired`;
     const zone_heater_cooler_topic = `${info.zones[0]}/heater-cooler`;
     const zone_humidifier_dehumidifier_topic = `${info.zones[0]}/humidifier-dehumidifier`;
     const zone_climate_topic = `${info.zones[0]}/climate`;
@@ -54,10 +56,11 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
     let timer_ = setTimeout(() => controller.updateReachability(false), 50);
 
     let heater_cooler_state = 0,
-        humidifier_dehumidifier_state = 0; // OFF
+        humidifier_dehumidifier_state = 0,
+        target_temperature = 0; // OFF
 
     function try_change_state() {
-        let pow = heater_cooler_state === 0 && humidifier_dehumidifier_state === 0;
+        let pow = heater_cooler_state != 0 || humidifier_dehumidifier_state != 0;
         let mode = AirConMode.AUTO;
         if (humidifier_dehumidifier_state < 0)
             mode = AirConMode.DRY;
@@ -65,7 +68,12 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
             mode = heater_cooler_state < 0 ? AirConMode.COOL : AirConMode.HEAT;
         }
 
-
+        runtime.pubsub
+            .pub(ac_pub_topic, <IControlInfo>{
+                pow: pow,
+                mode: mode,
+                stemp: target_temperature
+            });
     }
 
     runtime.pubsub
@@ -92,20 +100,24 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
                 .getCharacteristic(Characteristic.CurrentTemperature)
                 .updateValue(msg.currentTemperature);
 
-            msg.targetTemperature != null && controller
+            if (msg.targetTemperature != null) {
+                target_temperature = msg.targetTemperature;
+            }
+            /*msg.targetTemperature != null && controller
                 .getService(Service.HeaterCooler)
                 .getCharacteristic(Characteristic.TargetTemperature)
                 .updateValue(msg.targetTemperature);
-
+            */
             msg.currentHumidity != null && controller
-                .getService(Service.Thermostat)
+                .getService(Service.HumidifierDehumidifier)
                 .getCharacteristic(Characteristic.CurrentRelativeHumidity)
                 .updateValue(msg.currentHumidity);
 
-            msg.targetHumidity != null && controller
-                .getService(Service.Thermostat)
+            /*msg.targetHumidity != null && controller
+                .getService(Service.HumidifierDehumidifier)
                 .getCharacteristic(Characteristic.TargetRelativeHumidity)
                 .updateValue(msg.targetHumidity);
+            */
         });
 
     return controller;

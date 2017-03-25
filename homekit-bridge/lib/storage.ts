@@ -4,6 +4,7 @@ import {
 import {IStorage} from "../api/storage";
 
 const storage = new class Storage implements IStorage {
+    private db;
     private events;
 
     init(url: string): Promise {
@@ -12,6 +13,7 @@ const storage = new class Storage implements IStorage {
                 if (err)
                     return reject(err);
 
+                this.db = db;
                 this.events = db.collection('events');
 
                 resolve();

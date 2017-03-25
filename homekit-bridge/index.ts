@@ -14,11 +14,11 @@ logger.log("HomeKit-bridge starting...");
 
 const config: IConfig = require('./config.json');
 
-Promise.all(
+Promise.all([
         cache.init(config.cache),
         storage.init(config.storage),
         pubsub.init(config.pubsub)
-    )
+    ])
     .then(() => {
         const runtime : IRuntime = {
             uuid: hap.uuid,
@@ -32,7 +32,7 @@ Promise.all(
             cache: cache
         };
 
-        const accessories = config.accessories.map(x => require(x.module)(runtime, x));
+        const accessories = config.accessories.map(x => require(x.package)(runtime, x));
 
         const bridge = BridgeFactory(config, accessories);
 
@@ -46,6 +46,9 @@ Promise.all(
     })
     .then(() => {
         pubsub.sub_raw('#', (message, topic) => {
+
+            logger.info('RECEIVED:', topic, message);
+
             let parts = topic.split('/');
             let state = parts.pop();
             let device = parts.join('/');
@@ -64,4 +67,5 @@ Promise.all(
                 raw: message.toString()
             });
         })
-    });
+    })
+    .catch(logger.error);

@@ -1,5 +1,5 @@
 export interface IAccessory {
-    module: string;
+    package: string;
     id: string;
     zones: string[];
     config?: any;

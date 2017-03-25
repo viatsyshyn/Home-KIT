@@ -26,74 +26,85 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
     actuator
         .getService(Service.AccessoryInformation)
         .setCharacteristic(Characteristic.Manufacturer, "SmartHome LLC")
-        .setCharacteristic(Characteristic.Model, "Heater Controller Prototype A")
-        .setCharacteristic(Characteristic.SerialNumber, "HTC-PTA-0.0.1");
+        .setCharacteristic(Characteristic.Model, "Heater Actuator Prototype B")
+        .setCharacteristic(Characteristic.SerialNumber, "HTA-PTB-0.0.1");
 
     actuator.addService(Service.Outlet);
     actuator.addService(Service.TemperatureSensor);
 
-    const On_KEY = `${item_id}::${Characteristic.On.UUID}`;
     const sub_topic = `${item_id}/reported`;
     const pub_topic = `${item_id}/desired`;
-    const heater_cooler_topic = `${info.zones[0]}/heater-cooler`;
+    const zone_heater_cooler_topic = `${info.zones[0]}/heater-cooler`;
 
+    const On_KEY = `${item_id}::on`;
     actuator
         .getService(Service.Outlet)
         .getCharacteristic(Characteristic.On)
-        .on('get', (callback) => {
-            runtime.cache
-                .get(On_KEY)
-                .then(value => callback(null, Math.max(10, parseInt(value, 10))))
-                .catch(err => callback(err));
-        })
-        .on('set', (newValue, callback) => {
-            runtime.cache
-                .set(On_KEY, newValue)
-                .then(x => callback());
-        })
-        .on('change', event => {
-            runtime.pubsub.pub(pub_topic, { active: event.newValue });
-        });
+            .on('get', (callback) => runtime.cache.get(On_KEY)
+                    .then(value => callback(null, !!parseInt(value || 1, 10)))
+                    .catch(err => callback(err)))
+
+            .on('set', (newValue, callback) => runtime.cache.set(On_KEY, newValue)
+                    .then(x => callback())
+                    .catch(err => callback(err)))
+
+            .on('change', event => event.newValue != null
+                    && runtime.pubsub.pub(pub_topic, {active: !!event.newValue}));
+
 
     let timer_ = setTimeout(() => actuator.updateReachability(false), 50);
 
     runtime.pubsub
-        .sub(heater_cooler_topic, msg => {
+        /* Update reachability */
+        .sub(sub_topic, msg => {
+            actuator.updateReachability(true);
+
+            clearTimeout(timer_);
+            timer_ = setTimeout(() => actuator.updateReachability(false), 150000);
+        })
+        /* Track zone H/C state */
+        .sub(zone_heater_cooler_topic, msg => {
             msg.state != null && actuator
                 .getService(Service.Outlet)
                 .getCharacteristic(Characteristic.On)
                 .setValue(msg.state > 0);
         })
+        /* maintain intended status */
         .sub(sub_topic, msg => {
-            actuator.updateReachability(true);
+            if (msg.active == null)
+                return;
 
-            timer_ && clearTimeout(timer_);
-            timer_ = setTimeout(() => actuator.updateReachability(false), 150000);
+            const currentState = actuator
+                .getService(Service.Outlet)
+                .getCharacteristic(Characteristic.On)
+                .value;
 
-            if (typeof msg.active === 'boolean') {
-                const currentState = actuator
-                    .getService(Service.Outlet)
-                    .getCharacteristic(Characteristic.On)
-                    .value;
-
-                if (msg.active !== currentState) {
-                    runtime.pubsub.pub(pub_topic, { active: currentState });
-                }
+            if (msg.active != currentState && currentState != null) {
+                runtime.pubsub.pub(pub_topic, { active: !!currentState });
             }
 
-            if (Array.isArray(msg.values) && msg.values.length) {
-                let avg_temp = msg.values.reduce((a, x) => a + parseFloat(x), 0) / msg.values.length;
+        })
+        /* track temperatures */
+        .sub(sub_topic, msg => {
+            if (!Array.isArray(msg.values))
+                return;
 
-                actuator
-                    .getService(Service.TemperatureSensor)
-                    .getCharacteristic(Characteristic.CurrentTemperature)
-                    .updateValue(avg_temp);
+            let values = msg.values
+                .map(x => parseFloat(x))
+                .filter(x => !isNaN(x) && x != null && x > -127);
 
-                msg.values.length == 2 && actuator
-                    .getService(Service.Outlet)
-                    .getCharacteristic(Characteristic.OutletInUse)
-                    .updateValue((msg.values[0] - msg.values[1]) > .75);
-            }
+            if (!values.length)
+                return;
+
+            actuator
+                .getService(Service.TemperatureSensor)
+                .getCharacteristic(Characteristic.CurrentTemperature)
+                .updateValue(values.reduce((a, x) => a + x, 0) / values.length);
+
+            values.length > 1 && actuator
+                .getService(Service.Outlet)
+                .getCharacteristic(Characteristic.OutletInUse)
+                .updateValue((values[0] - values[1]) > .75);
         });
 
     return actuator;

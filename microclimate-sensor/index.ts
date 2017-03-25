@@ -21,8 +21,8 @@ module.exports = (runtime: IRuntime, info: IAccessory) =>
     sensor
         .getService(Service.AccessoryInformation)
         .setCharacteristic(Characteristic.Manufacturer, "SmartHome LLC")
-        .setCharacteristic(Characteristic.Model, "Climate Sensors Prototype A")
-        .setCharacteristic(Characteristic.SerialNumber, "MCS-PTA0.0.1");
+        .setCharacteristic(Characteristic.Model, "Climate Sensors Prototype B")
+        .setCharacteristic(Characteristic.SerialNumber, "MCS-PTB-0.0.1");
 
     // Add the actual TemperatureSensor Service.
     // We can see the complete list of Services and Characteristics in `lib/gen/HomeKitTypes.js`
@@ -35,13 +35,15 @@ module.exports = (runtime: IRuntime, info: IAccessory) =>
     let timer_ = setTimeout(() => sensor.updateReachability(false), 50);
 
     runtime.pubsub
+        /* Update reachbility */
         .sub(sub_topic, msg => {
-
             sensor.updateReachability(true);
 
-            timer_ && clearTimeout(timer_);
+            clearTimeout(timer_);
             timer_ = setTimeout(() => sensor.updateReachability(false), 150000);
-
+        })
+        /* track sensors */
+        .sub(sub_topic, msg => {
             let zone_update: any = { by: item_id };
             if (msg.temperature != null) {
                 sensor
@@ -71,9 +73,11 @@ module.exports = (runtime: IRuntime, info: IAccessory) =>
                 zone_update.currentAirQuality = Math.ceil(msg['harmful-gases']);
             }
 
-            info.zones.forEach(zone => {
-                runtime.pubsub.pub(`${zone}/climate`, zone_update);
-            });
+            if (Object.keys(zone_update).length > 1) {
+                info.zones.forEach(zone => {
+                    runtime.pubsub.pub(`${zone}/climate`, zone_update);
+                });
+            }
         });
 
     return sensor;
