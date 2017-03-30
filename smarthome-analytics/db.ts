@@ -141,3 +141,39 @@ export function getZoneState(start: Date, end: Date, zone: string): IZoneState[]
                 }]);
             }, []));
 }
+
+export interface IAirConditioning {
+    timestamp: number,
+    pow: boolean,
+    mode: number,
+    htemp: number,
+    otemp: number
+}
+
+export function getAirConditioning(start: Date, end: Date, device: string): IAirConditioning[] {
+    return storage
+        .find({
+            "device": device,
+            "timestamp": {$gt: start.getTime(), $lt: end.getTime()}
+        })
+        .map(function(r) {
+            return <IAirConditioning>{
+                timestamp: r.timestamp,
+                pow: r.message.pow,
+                mode: r.message.mode,
+                htemp: r.message.htemp,
+                otemp: r.message.otemp
+            }
+        })
+        .toArray()
+        .then(data => data.reduce((a, x) => {
+            var l = a[a.length - 1] || {};
+            return a.concat([{
+                timestamp: x.timestamp,
+                pow: peek(x.pow, l.pow),
+                mode: peek(x.mode, l.currentHumidity),
+                htemp: peek(x.htemp, l.htemp),
+                otemp: peek(x.otemp, l.otemp)
+            }]);
+        }, []));
+}

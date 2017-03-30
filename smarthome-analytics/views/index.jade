@@ -6,6 +6,7 @@ html
             var TH_DATA = !{JSON.stringify(graph1, null, 2)};
             var TTD_DATA = !{JSON.stringify(graph2, null, 2)};
             var LR_DATA = !{JSON.stringify(graph3, null, 2)};
+            var AC_DATA = !{JSON.stringify(graph4, null, 2)};
 
     body
 
@@ -20,3 +21,7 @@ html
         div#lrc(style="min-width: 310px; widht: 100%; height: 450px; margin: 0 auto")
 
         script(src="/lrchart.js")
+
+        div#ac(style="min-width: 310px; widht: 100%; height: 450px; margin: 0 auto")
+
+        script(src="/acchart.js")

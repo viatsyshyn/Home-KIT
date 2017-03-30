@@ -7,8 +7,9 @@ export function home(db) {
         const y = db.getTemperatureInOut(start, end, "livingroom-heater");
         const z = db.getDeviceOnOff(start, end, "livingroom-heater");
         const v = db.getZoneState(start, end, "livingroom");
+        const r = db.getAirConditioning(start, end, "livingroom-ac")
 
-        Promise.all([x,y,z,v]).then(result => {
+        Promise.all([x,y,z,v,r]).then(result => {
 
             let ttds: Array = result[1].concat(result[2]);
             ttds.sort(function(a, b){return a.timestamp-b.timestamp});
@@ -30,7 +31,8 @@ export function home(db) {
                 end: end,
                 graph1: result[0],
                 graph2: result[1],
-                graph3: result[3]
+                graph3: result[3],
+                graph4: result[4]
             });
         });
     };
