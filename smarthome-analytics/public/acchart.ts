@@ -4,6 +4,14 @@
     let AC_DATA: Array = window.AC_DATA || [];
     let moment = window.moment || null;
 
+    function powerstatus(data) {
+        if (data == true) {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
     Highcharts.chart('ac', {
         chart: {
             zoomType: 'xy'
@@ -86,7 +94,7 @@
             type: 'spline',
             step: 'left',
             yAxis: 1,
-            data: AC_DATA.map(r => r.pow),
+            data: AC_DATA.map(r => powerstatus(r.pow)),
 
         }, {
             name: 'Mode',
