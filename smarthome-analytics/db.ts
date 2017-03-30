@@ -107,7 +107,7 @@ function min_max(min, max, x) {
 }
 
 function peek() {
-    return [].slice.call(arguments).filter(x => x !== undefined)[0] || null;
+    return [].slice.call(arguments).filter(x => x != undefined)[0] || null;
 }
 
 export function getZoneState(start: Date, end: Date, zone: string): IZoneState[] {
@@ -171,7 +171,7 @@ export function getAirConditioning(start: Date, end: Date, device: string): IAir
             return a.concat([{
                 timestamp: x.timestamp,
                 pow: peek(x.pow, l.pow),
-                mode: peek(x.mode, l.currentHumidity),
+                mode: peek(x.mode, l.mode),
                 htemp: peek(x.htemp, l.htemp),
                 otemp: peek(x.otemp, l.otemp)
             }]);
