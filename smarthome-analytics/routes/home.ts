@@ -6,8 +6,9 @@ export function home(db) {
         const x = db.getTemperatureHumidity(start, end, "livingroom-microclimate");
         const y = db.getTemperatureInOut(start, end, "livingroom-heater");
         const z = db.getDeviceOnOff(start, end, "livingroom-heater");
+        const v = db.getZoneState(start, end, "livingroom");
 
-        Promise.all([x,y,z]).then(result => {
+        Promise.all([x,y,z,v]).then(result => {
 
             let ttds: Array = result[1].concat(result[2]);
             ttds.sort(function(a, b){return a.timestamp-b.timestamp});
@@ -28,7 +29,8 @@ export function home(db) {
                 start: start,
                 end: end,
                 graph1: result[0],
-                graph2: result[1]
+                graph2: result[1],
+                graph3: result[3]
             });
         });
     };
