@@ -117,11 +117,11 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
                     .getCharacteristic(Characteristic.CoolingThresholdTemperature)
                     .value;
 
-                if (event.newValue + 2 > coolingThreshold) {
+                if (event.newValue >= coolingThreshold - 1) {
                     thermostat
                         .getService(Service.Thermostat)
                         .getCharacteristic(Characteristic.CoolingThresholdTemperature)
-                        .setValue(event.newValue + 2);
+                        .setValue(event.newValue + 1);
                 }
             });
 
@@ -137,11 +137,11 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
                     .getCharacteristic(Characteristic.HeatingThresholdTemperature)
                     .value;
 
-                if (event.newValue - 2 < heatingThreshold) {
+                if (event.newValue <= heatingThreshold + 1) {
                     thermostat
                         .getService(Service.Thermostat)
-                        .getCharacteristic(Characteristic.CoolingThresholdTemperature)
-                        .setValue(event.newValue - 2);
+                        .getCharacteristic(Characteristic.HeatingThresholdTemperature)
+                        .setValue(event.newValue - 1);
                 }
             });
 
@@ -198,9 +198,15 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
 
             case Characteristic.TargetHeatingCoolingState.AUTO:
                 if (currentTemp < heatingThreshold - heatingDelta) {
-                    targetTemp = heatingThreshold + 1;
+                    targetTemp = heatingThreshold;
+                    coolingDelta = 100;
                 } else if (currentTemp > coolingThreshold + coolingDelta) {
-                    targetTemp = coolingThreshold - 1;
+                    targetTemp = coolingThreshold;
+                    heatingDelta = 100;
+                } else if (currentMode === Characteristic.CurrentHeatingCoolingState.OFF) {
+                    coolingDelta = 100;
+                    heatingDelta = 100;
+                    targetTemp = (heatingThreshold + coolingThreshold) / 2;
                 }
 
                 if (targetTemp != storedTargetTemp) {
