@@ -72,7 +72,7 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
             .pub(ac_pub_topic, <IControlInfo>{
                 pow: pow,
                 mode: mode,
-                stemp: target_temperature
+                stemp: target_temperature > 10 ? target_temperature : undefined
             });
     }
 

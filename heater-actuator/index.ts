@@ -41,7 +41,7 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
         .getService(Service.Outlet)
         .getCharacteristic(Characteristic.On)
             .on('get', (callback) => runtime.cache.get(On_KEY)
-                    .then(value => callback(null, !!parseInt(value || 1, 10)))
+                    .then(value => callback(null, !!parseInt(value || 1, 10))?1:0)
                     .catch(err => callback(err)))
 
             .on('set', (newValue, callback) => runtime.cache.set(On_KEY, newValue)
@@ -67,7 +67,7 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
             msg.state != null && actuator
                 .getService(Service.Outlet)
                 .getCharacteristic(Characteristic.On)
-                .setValue(msg.state > 0);
+                .setValue(msg.state > 0?1:0);
         })
         /* maintain intended status */
         .sub(sub_topic, msg => {
@@ -80,7 +80,7 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
                 .value;
 
             if (msg.active != currentState && currentState != null) {
-                runtime.pubsub.pub(pub_topic, { active: !!currentState });
+                runtime.pubsub.pub(pub_topic, { active: !!currentState?1:0 });
             }
 
         })

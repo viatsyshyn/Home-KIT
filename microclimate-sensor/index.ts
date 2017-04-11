@@ -45,7 +45,7 @@ module.exports = (runtime: IRuntime, info: IAccessory) =>
         /* track sensors */
         .sub(sub_topic, msg => {
             let zone_update: any = { by: item_id };
-            if (msg.temperature != null) {
+            if (msg.temperature != null && msg.temperature > -127) {
                 sensor
                     .getService(Service.TemperatureSensor)
                     .getCharacteristic(Characteristic.CurrentTemperature)
@@ -54,7 +54,7 @@ module.exports = (runtime: IRuntime, info: IAccessory) =>
                 zone_update.currentTemperature = msg.temperature;
             }
 
-            if (msg.humidity != null) {
+            if (msg.humidity != null && msg.humidity > 0) {
                 sensor
                     .getService(Service.HumiditySensor)
                     .getCharacteristic(Characteristic.CurrentRelativeHumidity)

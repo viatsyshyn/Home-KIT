@@ -77,7 +77,7 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
     thermostat
         .getService(Service.Outlet)
         .getCharacteristic(Characteristic.On)
-            .on('get', read(Schedule_On_KEY, 'bool', true))
+            .on('get', read(Schedule_On_KEY, 'int', 1))
             .on('set', write(Schedule_On_KEY));
 
     thermostat
@@ -281,6 +281,8 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
         .getCharacteristic(Characteristic.CurrentRelativeHumidity)
             .on('change', changeHumidifierDehumidifierState);
 
+    let currentHDState = 0;
+
     function changeHumidifierDehumidifierState() {
         const currentHumidity = thermostat.getService(Service.Thermostat)
             .getCharacteristic(Characteristic.CurrentRelativeHumidity)
@@ -290,15 +292,22 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
             .getCharacteristic(Characteristic.TargetRelativeHumidity)
             .value;
 
+        if (currentHumidity < 1 || targetHumidity < 1)
+            return;
+
         const threshold = 5;
 
         let state = null;
-        if (currentHumidity > (targetHumidity + threshold)) {
-            state = -1;
-        }
-
-        if (currentHumidity < (targetHumidity - threshold)) {
-            state = 1;
+        if (currentHDState != 0) {
+            if (currentHumidity > (targetHumidity + threshold)) {
+                state = -1;
+            } else if (currentHumidity < (targetHumidity - threshold)) {
+                state = +1;
+            }
+        } else if (currentHDState == +1 && currentHumidity > targetHumidity) {
+            state = 0;
+        } else if (currentHDState == -1 && currentHumidity < targetHumidity) {
+            state = 0;
         }
 
         if (state != null) {
@@ -332,6 +341,10 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
                     .updateValue(msg.state > 0 ? Characteristic.CurrentHeatingCoolingState.HEAT :
                                  msg.state < 0 ? Characteristic.CurrentHeatingCoolingState.COOL
                                                : Characteristic.CurrentHeatingCoolingState.OFF);
+        })
+        /* track H/C state */
+        .sub(zone_humidifier_dehumidifier_topic, msg => {
+            msg.state != null && (currentHDState = msg.state);
         });
 
     return thermostat;
