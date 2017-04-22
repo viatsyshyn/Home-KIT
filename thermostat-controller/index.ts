@@ -304,15 +304,15 @@ module.exports = (runtime: IRuntime, info: IAccessory) => {
         const threshold = 5;
 
         let state = null;
-        if (currentHDState != 0) {
+        if (currentHDState == 0) {
             if (currentHumidity > (targetHumidity + threshold)) {
                 state = -1;
             } else if (currentHumidity < (targetHumidity - threshold)) {
                 state = +1;
             }
-        } else if (currentHDState == +1 && currentHumidity > targetHumidity) {
-            state = 0;
-        } else if (currentHDState == -1 && currentHumidity < targetHumidity) {
+        } else if ((currentHDState == +1 && currentHumidity > targetHumidity)
+                || (currentHDState == -1 && currentHumidity < targetHumidity)) {
+            
             state = 0;
         }
 
