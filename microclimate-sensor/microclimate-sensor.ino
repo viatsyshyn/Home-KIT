@@ -14,16 +14,21 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
+#include <Wire.h>
+#include <Adafruit_ADS1015.h>
 #include <DHT.h>
 
 #define DHTTYPE DHT22
 
 #define BUS_DHT D5
+#define BUS_PIR D6
 
 WiFiClient client;
 PubSubClient mqtt;
 
 DHT dht(BUS_DHT, DHTTYPE);
+Adafruit_ADS1015 ads;     /* Use thi for the 12-bit version */
+
 ThreadController controller = ThreadController();
 Thread climateThread = Thread();
 
@@ -48,6 +53,9 @@ void setup() {
   }
   Serial.println("Serial intialization done");
 
+  Wire.begin(D1, D2); //sda, scl
+
+  pinMode(BUS_PIR, INPUT);
   pinMode(BUILTIN_LED, OUTPUT);
   ticker.attach(0.5, trigger_led);
 
@@ -169,6 +177,21 @@ void setup() {
   controller.add(&climateThread);
 
   dht.begin();
+
+  // The ADC input range (or gain) can be changed via the following
+  // functions, but be careful never to exceed VDD +0.3V max, or to
+  // exceed the upper and lower limits if you adjust the input range!
+  // Setting these values incorrectly may destroy your ADC!
+  //                                                                ADS1015  ADS1115
+  //                                                                -------  -------
+  // ads.setGain(GAIN_TWOTHIRDS);  // 2/3x gain +/- 6.144V  1 bit = 3mV      0.1875mV (default)
+     ads.setGain(GAIN_ONE);        // 1x gain   +/- 4.096V  1 bit = 2mV      0.125mV
+  // ads.setGain(GAIN_TWO);        // 2x gain   +/- 2.048V  1 bit = 1mV      0.0625mV
+  // ads.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.5mV    0.03125mV
+  // ads.setGain(GAIN_EIGHT);      // 8x gain   +/- 0.512V  1 bit = 0.25mV   0.015625mV
+  // ads.setGain(GAIN_SIXTEEN);    // 16x gain  +/- 0.256V  1 bit = 0.125mV  0.0078125mV
+  
+  ads.begin();
 }
 
 void loop() {
@@ -286,9 +309,21 @@ void climateProbeValues() {
   Serial.print(hic);
   Serial.print(" ");
 
-  float gas = analogRead(A0);
+  float adc0, adc1, adc2, adc3;
 
-  Serial.print(gas);
+  adc0 = ads.readADC_SingleEnded(0) / 4095.0;
+  adc1 = ads.readADC_SingleEnded(1) / 4095.0;
+  adc2 = ads.readADC_SingleEnded(2) / 4095.0;
+  
+  Serial.print(adc0);
+  Serial.print(" ");
+  Serial.print(adc1);
+  Serial.print(" ");
+  Serial.print(adc2);
+  Serial.print(" ");
+
+  int pir = digitalRead(BUS_PIR) == HIGH;
+  Serial.print(pir);
   Serial.print(" ");
 
   Serial.println("done");
@@ -308,7 +343,11 @@ void climateProbeValues() {
     root["heat-index"] = hic;
   }
   
-  root["harmful-gases"] = gas;
+  root["gases-level"] = adc0;
+  root["sound-level"] = adc1;
+  root["light-level"] = adc2;
+  root["pir-level"] = pir;
+  
   
   char buffer[256];
   root.printTo(buffer, sizeof(buffer));
