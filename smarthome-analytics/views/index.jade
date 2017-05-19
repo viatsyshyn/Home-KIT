@@ -10,6 +10,14 @@ html
 
     body
 
+        div(style="width: 100%;")
+            form(action="/" method="get")
+                label(style="padding: 15px;") start date
+                input(type="datetime-local" name="start" value="#{start}")
+                label(style="padding: 15px;") end date
+                input(type="datetime-local" name="end" value="#{end}")
+                button(type="submit" style="margin: 15px;") Update
+
         div#th(style="min-width: 310px; widht: 100%; height: 450px; margin: 0 auto")
 
         script(src="/thchart.js")
