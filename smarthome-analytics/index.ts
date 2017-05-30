@@ -3,6 +3,7 @@ import * as process from 'process';
 import * as bodyParser from "body-parser";
 import * as errorHandler from "errorhandler";
 import * as methodOverride from "method-override";
+import * as multer from 'multer';
 
 import * as routes from "./routes";
 import * as db from "./db";
@@ -34,8 +35,20 @@ if (env === 'development') {
     app.use(errorHandler());
 }
 
+var storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, './public/uploads/')
+    },
+    filename: function (req, file, cb) {
+        cb(null, Date.now() + '-' + file.originalname)
+    }
+});
+var upload = multer({ storage: storage });
+
 // Routes
 app.get('/', routes.home(db));
+app.get('/map', routes.map(db));
+app.post('/map', upload.single('upl'), routes.bpupload(db));
 
 let port = config.port || 3000;
 db.init(logger, config.storage, () => {
