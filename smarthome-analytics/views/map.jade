@@ -1,16 +1,29 @@
 html
    head
-
+      script(src="/components/jquery/dist/jquery.js")
+      script(src="/map-devices.js")
    body
-      form(method='post',enctype="multipart/form-data",action="/map")
-         p
-            input(type="text",name="title",placeholder="title")
-         p
-            input(type="file",name="upl")
-         p
-            input(type="submit")
-      div Building plan
-      div Items list
-      div
-         button Save
-         button Cancel
+      if is_img.length === 0
+         form(method='post',enctype="multipart/form-data",action="/map")
+            div Building plan
+            p
+               label Upload
+               input(type="file",name="upl")
+            p
+               input(type="submit")
+      else
+         #bp(style="background: url(/uploads/#{is_img[0].value}); display: inline-block; width: 800px; height: 800px; background-size:cover; position: relative")
+            each element in elements.filter(function(x) { return x.position.x !== null })
+               .device(id=element.id, style="position: absolute; top: #{element.position.y}; left: #{element.position.x};")
+                  img(src="" + element.img, style="display: inline-block;")
+                  div(style="display: inline-block;")
+                     | #{element.title)
+                     div= element.id
+
+         #devices(style="display: inline-block")
+            each element in elements.filter(function(x) { return x.position.x === null })
+               .device(id=element.id)
+                  img(src="" + element.img, style="display: inline-block;")
+                  div(style="display: inline-block;")
+                     | #{element.title)
+                     div= element.id

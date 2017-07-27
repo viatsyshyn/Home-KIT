@@ -49,6 +49,7 @@ var upload = multer({ storage: storage });
 app.get('/', routes.home(db));
 app.get('/map', routes.map(db));
 app.post('/map', upload.single('upl'), routes.bpupload(db));
+app.post('/settings', routes.set_settings(db));
 
 let port = config.port || 3000;
 db.init(logger, config.storage, () => {

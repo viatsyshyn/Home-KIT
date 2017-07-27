@@ -7,6 +7,7 @@ import {
 
 let storage = null;
 let logger = null;
+let settings = null;
 
 export function init(logger_: ILog, mongoUrl: string, callback) {
     logger = logger_;
@@ -18,8 +19,39 @@ export function init(logger_: ILog, mongoUrl: string, callback) {
         logger.info(`Connected to ${mongoUrl}`);
 
         storage = db.collection('events');
+        settings = db.collection('settings');
         callback();
     });
+}
+export interface ISettings {
+    device: string,
+    key: string,
+    value: any
+}
+
+export function getSettings(key: string): ISettings[] {
+    return settings
+        .find({
+            "key": key
+        })
+        .map(function(x){
+            return <ISettings>{
+                device: x.device,
+                key: x.key,
+                value: x.value
+            }
+        })
+        .toArray();
+}
+
+export function setSettings(insertObj: ISettings) {
+    return settings
+        .replaceOne({
+            "device": insertObj.device,
+            "key": insertObj.key
+        }, insertObj, {
+            upsert: true
+        });
 }
 
 export interface ITemperatureHumidity {
