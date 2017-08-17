@@ -1,3 +1,5 @@
+var _ = require('lodash');
+
 let elements: any = {
     "MAC": "C1:5D:3A:AE:5E:FA",
     "PIC": "031-45-154",
@@ -71,16 +73,29 @@ let elements: any = {
     }]
 };
 
+let COLORS = ('d50000 f28a02 ffc107 ffd600 78bd0b 1d8e17 0091ea 0097a7' +
+    ' 467d97 01579b 673ab7 c51162 880e4f ad1457 6a1b9a 4a148c' +
+    ' 3f51b5 d500f9 00bcd4 00c853 2eb966 820404 f23502 075f76 ff6900'
+)
+    .split(' ')
+    .map(function (x) { return '#' + x })
+    .reverse();
+
 export function map(db) {
     return function (req, res) {
         let map_img = db.getSettings("img");
         let device_posi = db.getSettings("position");
-        Promise.all([map_img, device_posi])
-            .then(([img, devices]) => {
+        let device_zones = db.getSettings("zones");
+        Promise.all([map_img, device_posi, device_zones])
+            .then(([img, devices, devZones]) => {
+
                 res.render('map', {
                     is_img: img,
+                    zones: (devZones.find((zones) => zones.device === "~") || {}).value || [],
+                    colors: COLORS,
                     elements: elements.accessories.map(x => ({
                         id: x.id,
+                        zones: (devZones.find((zones) => zones.device === x.id) || {}).value || [],
                         img: `/accessories/${x.id.split('-').pop()}.png`,
                         title: x.id.split('-').pop().toUpperCase(),
                         position: (devices.find((pos) => pos.device === x.id) || {}).value || {x: null, y: null}
@@ -93,7 +108,6 @@ export function map(db) {
 export function bpupload(db) {
     return function (req, res, next) {
         db.setSettings({device: "~", key: "img", value: req.file.filename});
-
         res.redirect('/map');
     };
 }

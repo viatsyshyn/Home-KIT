@@ -2,6 +2,10 @@ html
    head
       script(src="/components/jquery/dist/jquery.js")
       script(src="/map-devices.js")
+      script(src="/map-zones.js")
+      script(src="/map-new-zone.js")
+      script.
+         var COLORS = !{JSON.stringify(colors, null, 2)};
    body
       if is_img.length === 0
          form(method='post',enctype="multipart/form-data",action="/map")
@@ -12,6 +16,7 @@ html
             p
                input(type="submit")
       else
+         - function index(element) { return  zones.indexOf(element) };
          #bp(style="background: url(/uploads/#{is_img[0].value}); display: inline-block; width: 800px; height: 800px; background-size:cover; position: relative")
             each element in elements.filter(function(x) { return x.position.x !== null })
                .device(id=element.id, style="position: absolute; top: #{element.position.y}; left: #{element.position.x};")
@@ -19,6 +24,8 @@ html
                   div(style="display: inline-block;")
                      | #{element.title)
                      div= element.id
+                  each zone in element.zones
+                     div(style="background-color: #{colors[index(zone)]};", data-zone=zone)= zone
 
          #devices(style="display: inline-block")
             each element in elements.filter(function(x) { return x.position.x === null })
@@ -27,3 +34,14 @@ html
                   div(style="display: inline-block;")
                      | #{element.title)
                      div= element.id
+                  each zone in element.zones
+                     div(style="background-color: #{colors[index(zone)]};", data-zone=zone)= zone
+
+         #zones
+            each zone, index in zones
+               .zone(id=zone, style="display: inline-block; margin: 5px; background-color: #{colors[index]};") #{zone}
+
+         #newzone
+            form(action="", id="zoneform")
+               input(name="value", placeholder="Zone name")
+               button(type="submit") Add zone
